@@ -34,22 +34,27 @@
       editorProps: {
         handleDOMEvents: {
           click: (view, event) => {
-            const details = event.target.closest('details')
-            if (details) {
+            const summary = event.target.closest('summary')
+            if (summary) {
               event.preventDefault()
-              const newOpen = !details.open
-              details.open = newOpen
-              const pos = view.posAtDOM(details, 0)
-              if (pos !== null) {
-                const resolved = view.state.doc.resolve(pos)
-                if (resolved.depth >= 1) {
-                  const togglePos = resolved.before(1)
-                  const node = view.state.doc.nodeAt(togglePos)
-                  if (node && node.type.name === 'details') {
-                    const tr = view.state.tr.setNodeMarkup(togglePos, null, { ...node.attrs, open: newOpen })
-                    view.dispatch(tr)
+              const details = summary.closest('details')
+              if (details) {
+                const newOpen = !details.open
+                details.open = newOpen
+                try {
+                  const pos = view.posAtDOM(details, 0)
+                  if (pos !== null && pos >= 0 && pos <= view.state.doc.content.size) {
+                    const resolved = view.state.doc.resolve(pos)
+                    if (resolved.depth >= 1) {
+                      const togglePos = resolved.before(1)
+                      const node = view.state.doc.nodeAt(togglePos)
+                      if (node && node.type.name === 'details') {
+                        const tr = view.state.tr.setNodeMarkup(togglePos, null, { ...node.attrs, open: newOpen })
+                        view.dispatch(tr)
+                      }
+                    }
                   }
-                }
+                } catch {}
               }
               return true
             }
@@ -59,19 +64,21 @@
       },
       onUpdate: ({ editor: ed }) => {
         const { view } = ed
-        view.dom.querySelectorAll('details').forEach(el => {
-          const pos = view.posAtDOM(el, 0)
-          if (pos !== null) {
-            const resolved = view.state.doc.resolve(pos)
-            if (resolved.depth >= 1) {
-              const nodePos = resolved.before(1)
-              const node = view.state.doc.nodeAt(nodePos)
-              if (node && node.type.name === 'details') {
-                el.open = !!node.attrs.open
+        try {
+          view.dom.querySelectorAll('details').forEach(el => {
+            const pos = view.posAtDOM(el, 0)
+            if (pos !== null && pos >= 0 && pos <= view.state.doc.content.size) {
+              const resolved = view.state.doc.resolve(pos)
+              if (resolved.depth >= 1) {
+                const nodePos = resolved.before(1)
+                const node = view.state.doc.nodeAt(nodePos)
+                if (node && node.type.name === 'details') {
+                  el.open = !!node.attrs.open
+                }
               }
             }
-          }
-        })
+          })
+        } catch {}
         onUpdate?.({
           html: ed.getHTML(),
           json: ed.getJSON(),
@@ -128,14 +135,12 @@
   .editor :global(.ProseMirror details summary) { cursor: pointer; font-weight: 600; list-style: none; }
   .editor :global(.ProseMirror details summary)::marker,
   .editor :global(.ProseMirror details summary)::-webkit-details-marker { display: none; content: ''; }
-  .editor :global(.ProseMirror details > div) { padding-left: 1em; }
-  .editor :global(.toggle-arrow) {
-    display: inline-block; user-select: none;
-    width: 1em; text-align: center; font-size: 0.7em;
+  .editor :global(.ProseMirror details summary)::before {
+    content: '▸'; display: inline-block; width: 1em;
     transition: transform 0.15s; color: var(--muted);
-    vertical-align: middle; margin-right: 2px;
   }
-  .editor :global(details[open] > summary .toggle-arrow) { transform: rotate(90deg); }
+  .editor :global(details[open] > summary::before) { transform: rotate(90deg); }
+  .editor :global(.ProseMirror details > div) { padding-left: 1em; }
 
   :global(.slash-item) {
     display: flex; align-items: center; gap: 8px; width: 100%;

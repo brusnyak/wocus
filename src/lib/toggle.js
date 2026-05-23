@@ -5,15 +5,9 @@ export const DetailsSummary = Node.create({
   group: 'block',
   content: 'inline*',
   parseHTML() { return [{ tag: 'summary' }] },
-  renderHTML({ HTMLAttributes }) {
-    return ['summary', { 'data-summary': '' },
-      ['span', { 'data-toggle-arrow': '', contenteditable: 'false', class: 'toggle-arrow' }, '▸'],
-      0
-    ]
+  renderHTML() {
+    return ['summary', 0]
   },
-  addAttributes() {
-    return { class: { default: null } }
-  }
 })
 
 export const DetailsContent = Node.create({
@@ -21,12 +15,9 @@ export const DetailsContent = Node.create({
   group: 'block',
   content: 'block+',
   parseHTML() { return [{ tag: 'div[class="details-content"]' }] },
-  renderHTML({ HTMLAttributes }) {
+  renderHTML() {
     return ['div', { class: 'details-content' }, 0]
   },
-  addAttributes() {
-    return { class: { default: 'details-content' } }
-  }
 })
 
 export const Details = Node.create({
@@ -39,7 +30,6 @@ export const Details = Node.create({
   },
   addAttributes() {
     return {
-      class: { default: null },
       open: { default: false, parseHTML: el => el.hasAttribute('open'), renderHTML: attrs => attrs.open ? { open: '' } : {} }
     }
   }
