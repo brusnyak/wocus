@@ -119,18 +119,13 @@
 
         <label class="field">
           <span>Model</span>
+          <input type="text" bind:value={model} list="model-suggestions" placeholder={activeProvider === 'ollama' ? 'llama3, mistral, ...' : 'Enter model name'} />
           {#if currentModels.length > 0}
-            <select bind:value={model}>
+            <datalist id="model-suggestions">
               {#each currentModels as m}
-                <option value={m}>{m}</option>
+                <option value={m} />
               {/each}
-              <option value="__custom__">Custom model...</option>
-            </select>
-            {#if model === '__custom__'}
-              <input type="text" bind:value={model} placeholder="Enter model name" class="model-custom" />
-            {/if}
-          {:else}
-            <input type="text" bind:value={model} placeholder={activeProvider === 'ollama' ? 'llama3, mistral, ...' : 'Enter model name'} />
+            </datalist>
           {/if}
         </label>
 

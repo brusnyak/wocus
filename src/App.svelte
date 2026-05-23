@@ -112,6 +112,11 @@
           type: 'bulletList',
           content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] }]
         }
+      case 'number':
+        return {
+          type: 'orderedList',
+          content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] }]
+        }
       case 'code':
         return { type: 'codeBlock', content: [{ type: 'text', text }] }
       default:
@@ -132,6 +137,7 @@
         case 'divider': return '<hr>'
         case 'todo': return `<ul data-type="taskList"><li><label><input type="checkbox" ${b.checked ? 'checked' : ''}>${b.content}</label></li></ul>`
         case 'bullet': return `<p>• ${b.content}</p>`
+        case 'number': return `<ol><li>${b.content}</li></ol>`
         case 'code': return `<pre><code>${b.content}</code></pre>`
         default: return `<p>${b.content || ''}</p>`
       }

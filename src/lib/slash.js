@@ -18,24 +18,28 @@ let selectedIndex = 0
 let filterText = ''
 let activePos = null
 
-function applyBlock(id, editor, pos) {
+function applyBlock(id, editor) {
+  hideMenu()
   const chain = editor.chain().focus()
   switch (id) {
-    case 'h1': chain.toggleHeading({ level: 1 }); break
-    case 'h2': chain.toggleHeading({ level: 2 }); break
-    case 'h3': chain.toggleHeading({ level: 3 }); break
-    case 'toggle': chain.toggleWrap('details'); break
-    case 'todo': chain.toggleTaskList(); break
-    case 'bullet': chain.toggleBulletList(); break
-    case 'number': chain.toggleOrderedList(); break
-    case 'divider': chain.setHorizontalRule(); break
-    case 'code': chain.toggleCodeBlock(); break
+    case 'h1': chain.toggleHeading({ level: 1 }).run(); break
+    case 'h2': chain.toggleHeading({ level: 2 }).run(); break
+    case 'h3': chain.toggleHeading({ level: 3 }).run(); break
+    case 'toggle':
+      chain.insertContent({
+        type: 'details',
+        content: [
+          { type: 'detailsSummary', content: [{ type: 'text', text: 'Toggle' }] },
+          { type: 'detailsContent', content: [{ type: 'paragraph' }] }
+        ]
+      }).run()
+      break
+    case 'todo': chain.toggleTaskList().run(); break
+    case 'bullet': chain.toggleBulletList().run(); break
+    case 'number': chain.toggleOrderedList().run(); break
+    case 'divider': chain.setHorizontalRule().run(); break
+    case 'code': chain.toggleCodeBlock().run(); break
   }
-  chain.run()
-  if (pos !== undefined) {
-    editor.chain().focus().deleteRange({ from: pos - 1, to: pos }).run()
-  }
-  hideMenu()
 }
 
 function getFilteredBlocks() {
@@ -57,7 +61,7 @@ function renderMenu(editor) {
     if (i === selectedIndex) btn.classList.add('slash-selected')
     btn.innerHTML = `<span class="slash-icon">${b.icon}</span><span>${b.label}</span>`
     btn.onmouseenter = () => { selectedIndex = i; renderMenu(editor) }
-    btn.onclick = () => applyBlock(b.id, editor, activePos)
+    btn.onclick = () => applyBlock(b.id, editor)
     menu.appendChild(btn)
   })
 }
@@ -73,6 +77,16 @@ function showMenu(x, y, editor, pos) {
   renderMenu(editor)
 
   document.body.appendChild(menu)
+
+  setTimeout(() => {
+    const closer = (e) => {
+      if (menu && !menu.contains(e.target)) {
+        hideMenu()
+        document.removeEventListener('mousedown', closer)
+      }
+    }
+    document.addEventListener('mousedown', closer)
+  }, 0)
 }
 
 function hideMenu() {
@@ -82,14 +96,6 @@ function hideMenu() {
   selectedIndex = 0
 }
 
-function getSlashText(view) {
-  const { selection } = view.state
-  const { $from } = selection
-  const lineText = $from.parent.textContent
-  if (lineText.startsWith('/')) return lineText.slice(1)
-  return ''
-}
-
 export default Extension.create({
   name: 'slash',
 
@@ -97,35 +103,31 @@ export default Extension.create({
     return { Escape: () => { hideMenu(); return false } }
   },
 
+  onSelectionUpdate() { if (menu) hideMenu() },
+
   addProseMirrorPlugins() {
     const editor = this.editor
     return [new Plugin({
       key: new PluginKey('slash'),
       props: {
-        handleKeyDown(view, event) {
-          if (!menu) {
-            if (event.key === '/') {
-              const { selection } = view.state
-              const { empty, $from } = selection
-              if (!empty) return false
-              if ($from.parent.textContent.length === 0) {
-                const coords = view.coordsAtPos($from.pos)
-                showMenu(coords.left, coords.bottom, editor, $from.pos)
-                return true
-              }
+        handleTextInput(view, from, to, text) {
+          if (text === '/' && !menu) {
+            const { selection } = view.state
+            const { empty, $from } = selection
+            if (!empty) return false
+            if ($from.parent.textContent.length === 0) {
+              const coords = view.coordsAtPos($from.pos)
+              showMenu(coords.left, coords.bottom, editor, $from.pos)
+              return true
             }
-            return false
           }
+          return false
+        },
+
+        handleKeyDown(view, event) {
+          if (!menu) return false
 
           if (event.key === 'Escape') { hideMenu(); return true }
-          if (event.key === 'Backspace') {
-            const text = getSlashText(view)
-            if (text === '') { hideMenu(); return false }
-            filterText = text.length > 0 ? text : ''
-            renderMenu(editor)
-            if (getFilteredBlocks().length === 0) hideMenu()
-            return false
-          }
 
           const filtered = getFilteredBlocks()
 
@@ -144,16 +146,19 @@ export default Extension.create({
           if (event.key === 'Enter' || event.key === 'Tab') {
             event.preventDefault()
             const item = filtered[selectedIndex]
-            if (item) applyBlock(item.id, editor, activePos)
+            if (item) applyBlock(item.id, editor)
             return true
+          }
+          if (event.key === 'Backspace') {
+            hideMenu()
+            return false
           }
 
           if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
             filterText += event.key
             selectedIndex = 0
             renderMenu(editor)
-            const f = getFilteredBlocks()
-            if (f.length === 0) hideMenu()
+            if (getFilteredBlocks().length === 0) hideMenu()
             return true
           }
 
