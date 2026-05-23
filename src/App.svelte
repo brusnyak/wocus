@@ -526,7 +526,7 @@
 
     {#if organizerPrompt.show}
       <div class="overlay" onclick={() => organizerPrompt = { show: false, text: '' }} onkeydown={(e) => e.key === 'Escape' && (organizerPrompt = { show: false, text: '' })} role="dialog" tabindex="-1">
-        <div class="organizer-modal" onclick={(e) => e.stopPropagation()}>
+        <div class="organizer-modal" onclick={(e) => e.stopPropagation()} role="presentation">
           <div class="organizer-body">
             <p>This content has no structure yet. Organize it with AI?</p>
             <label class="always-check">
