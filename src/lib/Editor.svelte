@@ -8,11 +8,10 @@
   import { Details, DetailsContent, DetailsSummary } from './toggle.js'
   import SlashCommandExtension from './slash.js'
 
-  let { onUpdate, onReady } = $props()
+  let { onUpdate, onReady, viewMode = 'organized' } = $props()
 
   let el
   let editor
-  let toggleHandler
 
   onMount(() => {
     const tipTap = new Editor({
@@ -32,6 +31,42 @@
         DetailsSummary,
         SlashCommandExtension,
       ],
+      editorProps: {
+        handleDOMEvents: {
+          mousedown: (view, event) => {
+            const summary = event.target.closest('summary')
+            if (summary) {
+              event.preventDefault()
+              return true
+            }
+            return false
+          },
+          click: (view, event) => {
+            const summary = event.target.closest('summary')
+            if (summary) {
+              event.preventDefault()
+              const { posAtDOM } = view
+              const details = summary.closest('details')
+              if (details && posAtDOM) {
+                const pos = posAtDOM(details, 0)
+                if (pos !== null) {
+                  const resolved = view.state.doc.resolve(pos)
+                  if (resolved.depth >= 1) {
+                    const togglePos = resolved.before(1)
+                    const node = view.state.doc.nodeAt(togglePos)
+                    if (node && node.type.name === 'details') {
+                      const tr = view.state.tr.setNodeMarkup(togglePos, null, { open: !node.attrs.open })
+                      view.dispatch(tr)
+                    }
+                  }
+                }
+              }
+              return true
+            }
+            return false
+          }
+        }
+      },
       onUpdate: ({ editor: ed }) => {
         onUpdate?.({
           html: ed.getHTML(),
@@ -40,19 +75,6 @@
         })
       }
     })
-
-    toggleHandler = (e) => {
-      const summary = e.target.closest('summary')
-      if (summary) {
-        e.preventDefault()
-        e.stopPropagation()
-        const details = summary.closest('details')
-        if (details) {
-          details.open = !details.open
-        }
-      }
-    }
-    tipTap.view.dom.addEventListener('mousedown', toggleHandler, true)
 
     onReady?.({
       getText: () => tipTap.getText(),
@@ -63,14 +85,11 @@
       getEditor: () => tipTap
     })
 
-    return () => {
-      tipTap.view.dom.removeEventListener('mousedown', toggleHandler, true)
-      tipTap.destroy()
-    }
+    return () => { tipTap.destroy() }
   })
 </script>
 
-<div bind:this={el} class="editor"></div>
+<div bind:this={el} class="editor" class:raw-mode={viewMode === 'raw'}></div>
 
 <style>
   .editor { min-height: 60vh; outline: none; }
@@ -102,8 +121,26 @@
   .editor :global(.ProseMirror ul[data-type="taskList"] li input[type="checkbox"]) { margin: 0; width: 14px; height: 14px; cursor: pointer; }
   .editor :global(.ProseMirror ul[data-type="taskList"] li p) { margin: 0; }
   .editor :global(.ProseMirror details) { margin: 0.5em 0; }
-  .editor :global(.ProseMirror details summary) { cursor: pointer; font-weight: 600; }
+  .editor :global(.ProseMirror details summary) { cursor: default; font-weight: 600; }
   .editor :global(.ProseMirror details > div) { padding-left: 1em; }
+
+  /* Hide native marker, toggle via data-toggle icon */
+  .editor :global(.ProseMirror details summary)::marker,
+  .editor :global(.ProseMirror details summary)::-webkit-details-marker { display: none; content: ''; }
+
+  /* Raw mode flattening */
+  .editor.raw-mode :global(.ProseMirror h1),
+  .editor.raw-mode :global(.ProseMirror h2),
+  .editor.raw-mode :global(.ProseMirror h3) {
+    font-size: 1em; font-weight: bold; margin: 0.5em 0; letter-spacing: normal;
+  }
+  .editor.raw-mode :global(.ProseMirror details) { display: block; }
+  .editor.raw-mode :global(.ProseMirror details > div) { padding-left: 0; }
+  .editor.raw-mode :global(.ProseMirror details summary) { cursor: default; font-weight: normal; }
+  .editor.raw-mode :global(.ProseMirror details summary)::marker,
+  .editor.raw-mode :global(.ProseMirror details summary)::-webkit-details-marker { display: none; content: ''; }
+  .editor.raw-mode :global(.ProseMirror ul[data-type="taskList"] li input[type="checkbox"]) { display: none; }
+
   :global(.slash-item) {
     display: flex; align-items: center; gap: 8px; width: 100%;
     padding: 6px 8px; border: none; background: none; cursor: pointer;

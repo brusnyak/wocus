@@ -14,21 +14,36 @@
         <button class="close" onclick={() => onclose?.()}>✕</button>
       </div>
       <div class="modal-body">
-        <p>Wocus is a minimal, private, local-first note-taking app with AI-powered organization.</p>
-        <p>All data stays in your browser (IndexedDB). Nothing is sent to any server unless you explicitly trigger the AI organize feature with your own API key.</p>
+        <div class="hero">
+          <span class="logo">W</span>
+          <div>
+            <h3>Wocus</h3>
+            <p class="tagline">Minimal, private, local-first note-taking<br/>with AI-powered organization.</p>
+          </div>
+        </div>
 
-        <h3>Privacy & Security</h3>
-        <p>Wocus is fully local-first. Your notes, settings, and API key never leave your device unless you choose to organize with AI — and even then, data goes only to the API endpoint you configure. Wocus has no servers, no databases, no analytics, no tracking.</p>
+        <div class="section">
+          <div class="section-icon"><i class="fa-solid fa-shield-halved"></i></div>
+          <div>
+            <h4>Privacy & Security</h4>
+            <p>Wocus is fully local-first. Your notes, settings, and API key never leave your device unless you choose to organize with AI — and even then, data goes only to the API endpoint you configure. Wocus has no servers, no databases, no analytics, no tracking.</p>
+          </div>
+        </div>
 
-        <h3>Terms of Use</h3>
-        <p>Wocus is provided as-is, free to use, with no warranty. You are responsible for your own API key usage and costs. The app does not collect or transmit any personal data. By using the AI organize feature, your text is sent to the third-party API provider you configured; review their terms separately.</p>
+        <div class="section">
+          <div class="section-icon"><i class="fa-solid fa-scale-balanced"></i></div>
+          <div>
+            <h4>Terms of Use</h4>
+            <p>Wocus is provided as-is, free to use, with no warranty. You are responsible for your own API key usage and costs. The app does not collect or transmit any personal data. By using the AI organize feature, your text is sent to the third-party API provider you configured; review their terms separately.</p>
+          </div>
+        </div>
 
         <div class="links">
-          <a href="https://github.com/brusnyak/wocus" target="_blank" rel="noopener">GitHub</a>
-          &middot;
-          <a href="mailto:email.trader4u@gmail.com">Contact</a>
+          <a href="https://github.com/brusnyak/wocus" target="_blank" rel="noopener"><i class="fa-brands fa-github"></i> GitHub</a>
+          <span class="sep">&middot;</span>
+          <a href="mailto:email.trader4u@gmail.com"><i class="fa-solid fa-envelope"></i> Contact</a>
         </div>
-        <p class="credits">Built with Svelte · TipTap · IndexedDB</p>
+        <p class="credits">Svelte &middot; TipTap &middot; IndexedDB</p>
       </div>
     </div>
   </div>
@@ -44,7 +59,7 @@
   .modal {
     background: var(--surface);
     border-radius: 12px;
-    width: 460px;
+    width: 520px;
     max-width: 90vw;
     box-shadow: 0 8px 40px rgba(0,0,0,0.15);
   }
@@ -59,12 +74,40 @@
     color: var(--muted); padding: 4px;
   }
   .close:hover { color: var(--fg); }
-  .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-  .modal-body p { font-size: 0.9em; line-height: 1.6; margin: 0; }
-  .modal-body h3 { font-size: 0.9em; margin: 0.5em 0 0.2em; font-weight: 600; color: var(--muted); }
-  .modal-body h3:first-of-type { margin-top: 0; }
-  .links { text-align: center; margin-top: 0.5em; }
-  .links a { color: var(--accent); text-decoration: none; }
+  .modal-body { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+
+  .hero {
+    display: flex; align-items: center; gap: 16px;
+  }
+  .logo {
+    display: flex; align-items: center; justify-content: center;
+    width: 48px; height: 48px; border-radius: 12px;
+    background: var(--accent); color: #fff;
+    font-size: 1.6em; font-weight: 700; font-family: 'Roboto Mono', monospace;
+    flex-shrink: 0;
+  }
+  .hero h3 { margin: 0; font-size: 1.1em; font-weight: 600; }
+  .tagline { font-size: 0.85em; color: var(--muted); line-height: 1.5; margin: 2px 0 0; }
+
+  .section {
+    display: flex; gap: 12px; align-items: flex-start;
+  }
+  .section-icon {
+    width: 28px; flex-shrink: 0; text-align: center; color: var(--accent); font-size: 1em;
+    margin-top: 2px;
+  }
+  .section h4 { margin: 0 0 4px; font-size: 0.9em; font-weight: 600; }
+  .section p { font-size: 0.85em; line-height: 1.6; margin: 0; color: var(--fg); opacity: 0.85; }
+
+  .links {
+    text-align: center; margin-top: 4px;
+  }
+  .links a {
+    color: var(--accent); text-decoration: none; font-size: 0.85em;
+  }
   .links a:hover { text-decoration: underline; }
-  .credits { text-align: center; font-size: 0.8em !important; color: var(--muted); }
+  .sep { color: var(--muted); margin: 0 8px; font-size: 0.85em; }
+  .credits {
+    text-align: center; font-size: 0.75em !important; color: var(--muted); margin: 0;
+  }
 </style>

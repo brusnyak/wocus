@@ -14,23 +14,40 @@
         <button class="close" onclick={() => onclose?.()}>✕</button>
       </div>
       <div class="modal-body">
-        <h3>Features</h3>
-        <table><tbody>
-          <tr><td>Organize with AI</td><td><code>Ctrl/Cmd + Shift + O</code></td></tr>
-          <tr><td>Toggle Raw / Organized</td><td><code>Ctrl/Cmd + Shift + V</code></td></tr>
-          <tr><td>Change theme</td><td><code>Ctrl/Cmd + Shift + E</code></td></tr>
-          <tr><td>Change font</td><td><code>Ctrl/Cmd + Shift + A</code></td></tr>
-          <tr><td>Download</td><td><code>Ctrl/Cmd + S</code></td></tr>
-          <tr><td>Print</td><td><code>Ctrl/Cmd + P</code></td></tr>
-          <tr><td>Fullscreen</td><td><code>Ctrl/Cmd + Shift + F</code></td></tr>
-        </tbody></table>
-        <h3>Markdown</h3>
-        <table><tbody>
-          <tr><td>Bold</td><td><code>Ctrl/Cmd + B</code></td></tr>
-          <tr><td>Italic</td><td><code>Ctrl/Cmd + I</code></td></tr>
-          <tr><td>Insert link</td><td><code>Ctrl/Cmd + K</code></td></tr>
-          <tr><td>Code block</td><td><code>Ctrl/Cmd + Shift + C</code></td></tr>
-        </tbody></table>
+        <section>
+          <h3>Writing</h3>
+          <div class="grid">
+            <span>Type <code>/</code> for blocks</span><span>Headings, toggles, lists, code</span>
+            <span>Bold</span><span><code>Ctrl/Cmd + B</code></span>
+            <span>Italic</span><span><code>Ctrl/Cmd + I</code></span>
+            <span>Link</span><span><code>Ctrl/Cmd + K</code></span>
+            <span>Code block</span><span><code>Ctrl/Cmd + Shift + C</code></span>
+          </div>
+        </section>
+        <section>
+          <h3>AI & Views</h3>
+          <div class="grid">
+            <span>Organize with AI</span><span><code>Ctrl/Cmd + Shift + O</code></span>
+            <span>Toggle Draft / Structured</span><span><code>Ctrl/Cmd + Shift + V</code></span>
+            <span>Voice input</span><span>Click <i class="fa-solid fa-microphone"></i> or system dictation</span>
+          </div>
+        </section>
+        <section>
+          <h3>Appearance</h3>
+          <div class="grid">
+            <span>Cycle theme</span><span><code>Ctrl/Cmd + Shift + E</code></span>
+            <span>Cycle font</span><span><code>Ctrl/Cmd + Shift + A</code></span>
+            <span>Fullscreen</span><span><code>Ctrl/Cmd + Shift + F</code></span>
+          </div>
+        </section>
+        <section>
+          <h3>Document</h3>
+          <div class="grid">
+            <span>Download</span><span><code>Ctrl/Cmd + S</code></span>
+            <span>Print</span><span><code>Ctrl/Cmd + P</code></span>
+            <span>Search</span><span><code>Ctrl/Cmd + F</code></span>
+          </div>
+        </section>
       </div>
     </div>
   </div>
@@ -46,7 +63,7 @@
   .modal {
     background: var(--surface);
     border-radius: 12px;
-    width: 460px;
+    width: 500px;
     max-width: 90vw;
     box-shadow: 0 8px 40px rgba(0,0,0,0.15);
   }
@@ -61,12 +78,19 @@
     color: var(--muted); padding: 4px;
   }
   .close:hover { color: var(--fg); }
-  .modal-body { padding: 20px; }
-  .modal-body h3 { font-size: 0.9em; margin: 1em 0 0.5em; font-weight: 600; color: var(--muted); }
-  .modal-body h3:first-child { margin-top: 0; }
-  table { width: 100%; border-collapse: collapse; }
-  td { padding: 4px 0; font-size: 0.85em; }
-  td:last-child { text-align: right; }
+  .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+  section { }
+  section h3 {
+    font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.05em;
+    margin: 0 0 8px; font-weight: 600; color: var(--muted);
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 12px;
+    font-size: 0.85em;
+  }
+  .grid span:nth-child(even) { text-align: right; }
   code {
     font-family: 'Roboto Mono', monospace;
     font-size: 0.85em;
@@ -74,4 +98,5 @@
     background: var(--code-bg);
     border-radius: 3px;
   }
+  i { color: var(--accent); }
 </style>

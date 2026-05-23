@@ -10,7 +10,8 @@
         class:h2={heading.level === 2}
         onclick={() => onNavigate?.(i)}
       >
-        {heading.content}
+        <span class="dot"></span>
+        <span class="label">{heading.content}</span>
       </button>
     {/each}
   </nav>
@@ -19,34 +20,42 @@
 <style>
   .sidebar {
     position: fixed;
-    right: 0;
+    left: 0;
     top: 50%;
     transform: translateY(-50%);
     width: 200px;
     padding: 12px 0;
-    opacity: 0.15;
-    transition: opacity 0.3s;
+    opacity: 0;
+    transition: opacity 0.25s;
     z-index: 50;
   }
-  .sidebar:hover { opacity: 0.8; }
+  .sidebar:hover { opacity: 1; }
   .item {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     width: 100%;
-    text-align: right;
-    padding: 3px 16px;
+    text-align: left;
+    padding: 4px 16px;
     border: none;
     background: none;
     cursor: pointer;
     font-size: 0.75em;
-    color: var(--fg);
+    color: var(--muted);
     line-height: 1.5;
+    font-family: 'Roboto Mono', monospace;
+    transition: color 0.15s;
+  }
+  .item.h2 { padding-left: 28px; }
+  .item:hover { color: var(--fg); }
+  .dot {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--muted); flex-shrink: 0;
+  }
+  .item:hover .dot { background: var(--accent); }
+  .label {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    opacity: 0.5;
-    font-family: 'Roboto Mono', monospace;
-    border-right: 2px solid transparent;
   }
-  .item.h2 { padding-right: 24px; font-size: 0.7em; }
-  .item:hover { opacity: 1; border-right-color: var(--accent); }
 </style>

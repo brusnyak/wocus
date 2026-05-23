@@ -32,9 +32,12 @@ export const Details = Node.create({
   content: 'detailsSummary detailsContent',
   parseHTML() { return [{ tag: 'details' }] },
   renderHTML({ HTMLAttributes }) {
-    return ['details', HTMLAttributes, 0]
+    return ['details', { ...HTMLAttributes, 'data-toggle': '' }, 0]
   },
   addAttributes() {
-    return { class: { default: null } }
+    return {
+      class: { default: null },
+      open: { default: false, parseHTML: el => el.hasAttribute('open'), renderHTML: attrs => attrs.open ? { open: '' } : {} }
+    }
   }
 })

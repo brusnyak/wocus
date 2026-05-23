@@ -20,8 +20,7 @@
   let organizing = $state(false)
   let error = $state('')
   let headingElements = $state([])
-  let rawApi = $state(null)
-  let organizedApi = $state(null)
+  let editorApi = $state(null)
   let searchOpen = $state(false)
   let searchQuery = $state('')
   let searchMatches = $state([])
@@ -29,6 +28,7 @@
   let searchInputEl = $state(null)
   let listening = $state(false)
   let recognition = $state(null)
+  let interimText = $state('')
 
   const FONTS = ['monospace', 'serif', 'sans-serif']
   let fontIndex = $state(0)
@@ -43,6 +43,7 @@
   let font = $derived(FONTS[fontIndex])
 
   let saveTimer
+  let organizePromptResolve = null
 
   $effect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -54,8 +55,22 @@
     themeIndex = THEMES.indexOf(s.darkMode ? 'dark' : 'light')
     if (themeIndex === -1) themeIndex = 0
     note = n
-    updateCounts(n.rawText || '')
+    updateCounts(n.content ? textFromJson(n.content) : '')
     loaded = true
+  }
+
+  function textFromJson(jsonStr) {
+    if (!jsonStr) return ''
+    try {
+      const data = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr
+      if (data.type === 'doc' && data.content) {
+        return data.content.map(b => {
+          const t = b.content ? (Array.isArray(b.content) ? b.content.map(c => c.text || '').join('') : b.content) : ''
+          return t
+        }).filter(t => t).join('\n\n')
+      }
+      return ''
+    } catch { return '' }
   }
 
   function updateCounts(text) {
@@ -70,25 +85,16 @@
     }, 400)
   }
 
-  function handleRawUpdate({ html, json, text }) {
+  function handleUpdate({ html, json, text }) {
     if (!note || !loaded) return
-    note.rawContent = JSON.stringify(json)
-    note.rawHtml = html
-    note.rawText = text
+    note.content = JSON.stringify(json)
+    note.html = html
+    note.text = text
     updateCounts(text)
     queueSave()
   }
 
-  function handleOrganizedUpdate({ html, json, text }) {
-    if (!note || !loaded) return
-    note.organizedContent = JSON.stringify(json)
-    note.organizedHtml = html
-    note.organizedText = text
-    updateCounts(text)
-    queueSave()
-  }
-
-  function blockToTipTapNode(b) {
+  function blocksToTipTapNode(b) {
     const text = (b.content || '').toString()
     switch (b.type) {
       case 'heading':
@@ -98,6 +104,7 @@
       case 'toggle':
         return {
           type: 'details',
+          attrs: { open: false },
           content: [
             { type: 'detailsSummary', content: [{ type: 'text', text }] },
             { type: 'detailsContent', content: (b.children || []).map(c => ({ type: 'paragraph', content: [{ type: 'text', text: c.content || '' }] })) }
@@ -150,7 +157,7 @@
   function extractSections(jsonStr) {
     if (!jsonStr) return []
     try {
-      const data = JSON.parse(jsonStr)
+      const data = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr
       const blocks = Array.isArray(data) ? data : (data.content || [])
       const sections = []
       let currentSection = { heading: null, index: 0 }
@@ -173,86 +180,67 @@
   }
 
   $effect(() => {
-    if (viewMode === 'organized' && note?.organizedContent) {
-      headingElements = extractSections(note.organizedContent).map(s => s.heading)
+    if (viewMode === 'organized' && note?.content) {
+      headingElements = extractSections(note.content).map(s => s.heading)
     } else { headingElements = [] }
   })
 
+  function hasStructure(jsonStr) {
+    if (!jsonStr) return false
+    try {
+      const data = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr
+      const blocks = data.content || []
+      return blocks.some(b => ['heading', 'details', 'taskList', 'horizontalRule', 'bulletList', 'orderedList', 'codeBlock'].includes(b.type)
+        && b.type !== 'paragraph')
+    } catch { return false }
+  }
+
   async function organize() {
     if (!s.hasApiKey()) { error = 'Add an API key in Settings first.'; return }
-    const latestText = viewMode === 'raw' ? (note?.rawText || '') : (note?.organizedText || '')
+    const latestText = note?.text || note?.rawText || ''
     if (!latestText) { error = 'Nothing to organize — write some text first.'; return }
     organizing = true; error = ''
     try {
-      if (viewMode === 'organized' && latestText !== note.rawText) {
-        note.rawText = latestText
-      }
       const result = await organizeWithAI(latestText, {
         apiEndpoint: s.apiEndpoint, apiKey: s.apiKey, modelName: s.modelName
       })
       if (result?.blocks) {
         const tipTapJson = blocksToTipTapJson(result.blocks)
-        note.organizedContent = JSON.stringify(tipTapJson)
-        note.organizedText = result.blocks.map(b => b.content || '').join('\n')
-        note.organizedHtml = blocksToHtml(result.blocks)
+        note.content = JSON.stringify(tipTapJson)
+        note.html = blocksToHtml(result.blocks)
+        note.text = result.blocks.map(b => b.content || '').join('\n')
         await saveNote($state.snapshot(note))
         viewMode = 'organized'
-        requestAnimationFrame(() => loadContent('organized'))
+        requestAnimationFrame(() => loadContent())
       } else { error = 'AI returned unexpected format.' }
     } catch (e) { error = e.message || 'Failed to organize' }
     organizing = false
   }
 
-  function loadContent(mode) {
-    const api = mode === 'raw' ? rawApi : organizedApi
-    if (!api) return
-    if (mode === 'raw' && note?.rawContent) {
-      try { api.setContent(JSON.parse(note.rawContent)) } catch { api.setContent('') }
-    } else if (mode === 'organized' && note?.organizedContent) {
-      try {
-        const c = JSON.parse(note.organizedContent)
-        api.setContent(c.type === 'doc' ? c : blocksToTipTapJson(c))
-      } catch { api.setContent(note.organizedHtml || '') }
-    } else { api.setContent('') }
+  function loadContent() {
+    if (!editorApi) return
+    if (note?.content) {
+      try { editorApi.setContent(JSON.parse(note.content)) } catch { editorApi.setContent('') }
+    } else { editorApi.setContent('') }
   }
 
-  function handleRawReady(api) { rawApi = api; loadContent('raw') }
-  function handleOrganizedReady(api) { organizedApi = api; loadContent('organized') }
+  function handleReady(api) {
+    editorApi = api
+    loadContent()
+  }
 
-  function switchView(mode) {
-    if (mode === 'raw' && viewMode === 'organized' && note?.organizedContent) {
-      try {
-        const organized = JSON.parse(note.organizedContent)
-        if (organized.type === 'doc' && organized.content) {
-          const rawText = organized.content.map(b => {
-            if (b.type === 'horizontalRule') return '\n---\n'
-            const text = b.content
-              ? (Array.isArray(b.content) ? b.content.map(c => c.text || '').join('') : b.content)
-              : ''
-            return text
-          }).filter(t => t).join('\n\n')
-          if (rawText) {
-            note.rawText = rawText
-            note.rawContent = note.organizedContent
-            note.rawHtml = note.organizedHtml
-          }
-        }
-      } catch {}
-    }
+  function switchMode(mode) {
     viewMode = mode
-    requestAnimationFrame(() => loadContent(mode))
   }
 
   function handleNavigate(index) {
-    const editor = organizedApi?.getEditor()
-    if (!editor) return
-    const headings = editor.view.dom.querySelectorAll('h1, h2')
+    if (!editorApi) return
+    const { view } = editorApi.getEditor()
+    const headings = view.dom.querySelectorAll('h1, h2')
     if (headings[index]) headings[index].scrollIntoView({ behavior: 'smooth' })
   }
 
-  function getCurrentEditor() {
-    return viewMode === 'raw' ? rawApi : organizedApi
-  }
+  function getCurrentEditor() { return editorApi }
 
   function doSearch() {
     const editor = getCurrentEditor()
@@ -278,9 +266,8 @@
   function navigateToMatch(index) {
     const editor = getCurrentEditor()
     if (!editor || !searchMatches.length) return
-    const match = searchMatches[index]
     const { state, dispatch } = editor.getEditor().view
-    const tr = state.tr.setSelection(TextSelection.create(state.doc, match.from, match.to))
+    const tr = state.tr.setSelection(TextSelection.create(state.doc, searchMatches[index].from, searchMatches[index].to))
     dispatch(tr.scrollIntoView())
     editor.getEditor().view.focus()
   }
@@ -298,24 +285,35 @@
   }
 
   function toggleVoice() {
+    if (listening) { recognition?.stop(); listening = false; interimText = ''; return }
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SpeechRecognition) { error = 'Speech recognition not supported in this browser.'; return }
-    if (listening) { recognition?.stop(); listening = false; return }
     const sr = new SpeechRecognition()
     sr.lang = 'en-US'
     sr.interimResults = true
     sr.continuous = true
+    let finalizedText = ''
     sr.onresult = (e) => {
-      const text = Array.from(e.results).map(r => r[0].transcript).join(' ')
+      let interim = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const transcript = e.results[i][0].transcript
+        if (e.results[i].isFinal) {
+          finalizedText += transcript + ' '
+        } else {
+          interim += transcript
+        }
+      }
+      interimText = interim
       const editor = getCurrentEditor()
-      if (editor) {
+      if (editor && finalizedText) {
         const { view } = editor.getEditor()
-        const tr = view.state.tr.replaceWith(view.state.selection.from, view.state.selection.to, view.state.schema.text(text + ' '))
+        const tr = view.state.tr.insertText(finalizedText, view.state.selection.to)
         view.dispatch(tr)
+        finalizedText = ''
       }
     }
-    sr.onerror = () => { listening = false }
-    sr.onend = () => { listening = false }
+    sr.onerror = () => { listening = false; interimText = '' }
+    sr.onend = () => { listening = false; interimText = '' }
     sr.start()
     recognition = sr
     listening = true
@@ -336,7 +334,7 @@
   function cycleFont() { fontIndex = (fontIndex + 1) % FONTS.length }
 
   function downloadText() {
-    const text = viewMode === 'raw' ? (note?.rawText || '') : (note?.organizedText || '')
+    const text = note?.text || ''
     const blob = new Blob([text], { type: 'text/plain' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
@@ -345,7 +343,7 @@
   }
 
   function printText() {
-    const content = viewMode === 'raw' ? (note?.rawHtml || '') : (note?.organizedHtml || '')
+    const content = note?.html || ''
     const win = window.open('', '', 'width=800,height=600')
     win.document.write(`<html><head><title>Wocus</title><style>body{font-family:Georgia,serif;max-width:700px;margin:40px auto;line-height:1.8;padding:0 20px}</style></head><body>${content}</body></html>`)
     win.document.close(); win.focus(); win.print()
@@ -358,10 +356,11 @@
 
   function handleKeydown(e) {
     const mod = e.metaKey || e.ctrlKey
+    if (e.key === '?' && !mod) { e.preventDefault(); helpOpen = true; return }
     if (mod && e.shiftKey) {
       switch (e.key) {
         case 'O': e.preventDefault(); organize(); break
-        case 'V': e.preventDefault(); switchView(viewMode === 'raw' ? 'organized' : 'raw'); break
+        case 'V': e.preventDefault(); switchMode(viewMode === 'raw' ? 'organized' : 'raw'); break
         case 'E': e.preventDefault(); cycleTheme(); break
         case 'A': e.preventDefault(); cycleFont(); break
         case 'F': e.preventDefault(); toggleFullscreen(); break
@@ -390,19 +389,16 @@
       </div>
     {/if}
 
-    <section><article class="editor-wrap">
+    <div class="mode-label" onclick={() => switchMode(viewMode === 'raw' ? 'organized' : 'raw')} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && switchMode(viewMode === 'raw' ? 'organized' : 'raw')}>
       {#if viewMode === 'raw'}
-        <Editor onUpdate={handleRawUpdate} onReady={handleRawReady} />
+        <i class="fa-solid fa-pen-fancy"></i> Draft
       {:else}
-        {#if note?.organizedHtml || note?.organizedContent}
-          <Editor onUpdate={handleOrganizedUpdate} onReady={handleOrganizedReady} />
-        {:else}
-          <div class="empty-organized">
-            <p>No organized content yet.</p>
-            <p>Write something in Raw view and click Organize.</p>
-          </div>
-        {/if}
+        <i class="fa-solid fa-folder-tree"></i> Structured
       {/if}
+    </div>
+
+    <section><article class="editor-wrap">
+      <Editor onUpdate={handleUpdate} onReady={handleReady} {viewMode} />
     </article></section>
 
     <div class="icons-top">
@@ -415,7 +411,7 @@
       <button class="icon-btn" onclick={organize} disabled={organizing} title="Organize with AI (⌘⇧O)">
         <i class="fa-solid fa-folder-tree"></i>
       </button>
-      <button class="icon-btn" onclick={() => switchView(viewMode === 'raw' ? 'organized' : 'raw')} disabled={!note?.organizedContent} title="Toggle view (⌘⇧V)">
+      <button class="icon-btn" onclick={() => switchMode(viewMode === 'raw' ? 'organized' : 'raw')} title="Toggle view (⌘⇧V)">
         {#if viewMode === 'raw'}
           <i class="fa-solid fa-toggle-off"></i>
         {:else}
@@ -467,16 +463,27 @@
       </div>
     {/if}
 
+    {#if listening}
+      <div class="voice-indicator">
+        <i class="fa-solid fa-microphone" class:fa-beat-fade={true} style="color:var(--accent)"></i>
+        {#if interimText}
+          <span class="voice-interim">{interimText}</span>
+        {:else}
+          <span class="voice-hint">Listening...</span>
+        {/if}
+      </div>
+    {/if}
+
+    <div class="word-count">{charCount} / {wordCount}</div>
+
     <div class="icons-bottom-right">
-      <button class="icon-btn" onclick={() => helpOpen = true} title="Help">
+      <button class="icon-btn" onclick={() => helpOpen = true} title="Help (?)">
         <i class="fa-regular fa-circle-question"></i>
       </button>
       <button class="icon-btn" onclick={() => aboutOpen = true} title="About">
         <i class="fa-solid fa-circle-info"></i>
       </button>
     </div>
-
-    <div class="word-count">{charCount} / {wordCount}</div>
 
     {#if viewMode === 'organized' && headingElements.length > 0}
       <Sidebar {headings} onNavigate={handleNavigate} />
@@ -504,6 +511,17 @@
   .app-shell.font-sans { font-family: Roboto, Arial, Helvetica, sans-serif; }
   section { max-width: 800px; margin: auto; line-height: 1.8; font-size: 16px; }
   .editor-wrap { min-height: 80vh; }
+
+  .mode-label {
+    position: fixed; top: 16px; left: 20px;
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.75em; color: var(--muted); opacity: 0.4;
+    cursor: pointer; z-index: 50;
+    transition: opacity 0.2s; user-select: none;
+    font-family: 'Roboto Mono', monospace;
+  }
+  .mode-label:hover { opacity: 0.8; color: var(--fg); }
+
   .error-toast {
     position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
     display: flex; align-items: center; gap: 8px;
@@ -513,8 +531,6 @@
     max-width: 500px;
   }
   .dismiss { background: none; border: none; cursor: pointer; color: inherit; font-size: 1em; padding: 2px; }
-  .empty-organized { text-align: center; margin-top: 6rem; color: var(--muted); }
-  .empty-organized p { margin: 0.5em 0; }
 
   .icon-btn {
     display: flex; align-items: center; justify-content: center;
@@ -541,6 +557,24 @@
     opacity: 0.4; transition: opacity 0.15s; z-index: 50;
   }
   .word-count:hover { opacity: 0.8; }
+
+  .voice-indicator {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 0.8em; color: var(--fg);
+    z-index: 100;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    max-width: 400px;
+  }
+  .voice-interim {
+    opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .voice-hint { opacity: 0.5; }
+
   .search-bar {
     position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
     display: flex; align-items: center; gap: 6px;

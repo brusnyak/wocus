@@ -30,8 +30,7 @@ export async function ensureNote() {
   if (!note) {
     note = {
       id: 1,
-      rawContent: '',
-      organizedContent: '',
+      content: '',
       title: 'Untitled',
       createdAt: Date.now(),
       updatedAt: Date.now()
@@ -45,12 +44,9 @@ export async function saveNote(data) {
   const db = await getDb()
   const note = {
     id: 1,
-    rawContent: typeof data.rawContent === 'string' ? data.rawContent : '',
-    organizedContent: typeof data.organizedContent === 'string' ? data.organizedContent : '',
-    rawHtml: typeof data.rawHtml === 'string' ? data.rawHtml : '',
-    organizedHtml: typeof data.organizedHtml === 'string' ? data.organizedHtml : '',
-    rawText: typeof data.rawText === 'string' ? data.rawText : '',
-    organizedText: typeof data.organizedText === 'string' ? data.organizedText : '',
+    content: typeof data.content === 'string' ? data.content : '',
+    html: typeof data.html === 'string' ? data.html : '',
+    text: typeof data.text === 'string' ? data.text : '',
     title: data.title || 'Untitled',
     createdAt: data.createdAt || Date.now(),
     updatedAt: Date.now()
