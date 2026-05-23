@@ -44,12 +44,15 @@
     toggleHandler = (e) => {
       const summary = e.target.closest('summary')
       if (summary) {
+        e.preventDefault()
         e.stopPropagation()
         const details = summary.closest('details')
-        if (details) details.open = !details.open
+        if (details) {
+          details.open = !details.open
+        }
       }
     }
-    tipTap.view.dom.addEventListener('click', toggleHandler, true)
+    tipTap.view.dom.addEventListener('mousedown', toggleHandler, true)
 
     onReady?.({
       getText: () => tipTap.getText(),
@@ -61,7 +64,7 @@
     })
 
     return () => {
-      tipTap.view.dom.removeEventListener('click', toggleHandler, true)
+      tipTap.view.dom.removeEventListener('mousedown', toggleHandler, true)
       tipTap.destroy()
     }
   })

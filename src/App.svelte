@@ -27,6 +27,8 @@
   let searchMatches = $state([])
   let searchIndex = $state(0)
   let searchInputEl = $state(null)
+  let listening = $state(false)
+  let recognition = $state(null)
 
   const FONTS = ['monospace', 'serif', 'sans-serif']
   let fontIndex = $state(0)
@@ -178,10 +180,14 @@
 
   async function organize() {
     if (!s.hasApiKey()) { error = 'Add an API key in Settings first.'; return }
-    if (!note?.rawText) { error = 'Nothing to organize — write some text first.'; return }
+    const latestText = viewMode === 'raw' ? (note?.rawText || '') : (note?.organizedText || '')
+    if (!latestText) { error = 'Nothing to organize — write some text first.'; return }
     organizing = true; error = ''
     try {
-      const result = await organizeWithAI(note.rawText, {
+      if (viewMode === 'organized' && latestText !== note.rawText) {
+        note.rawText = latestText
+      }
+      const result = await organizeWithAI(latestText, {
         apiEndpoint: s.apiEndpoint, apiKey: s.apiKey, modelName: s.modelName
       })
       if (result?.blocks) {
@@ -214,6 +220,25 @@
   function handleOrganizedReady(api) { organizedApi = api; loadContent('organized') }
 
   function switchView(mode) {
+    if (mode === 'raw' && viewMode === 'organized' && note?.organizedContent) {
+      try {
+        const organized = JSON.parse(note.organizedContent)
+        if (organized.type === 'doc' && organized.content) {
+          const rawText = organized.content.map(b => {
+            if (b.type === 'horizontalRule') return '\n---\n'
+            const text = b.content
+              ? (Array.isArray(b.content) ? b.content.map(c => c.text || '').join('') : b.content)
+              : ''
+            return text
+          }).filter(t => t).join('\n\n')
+          if (rawText) {
+            note.rawText = rawText
+            note.rawContent = note.organizedContent
+            note.rawHtml = note.organizedHtml
+          }
+        }
+      } catch {}
+    }
     viewMode = mode
     requestAnimationFrame(() => loadContent(mode))
   }
@@ -270,6 +295,30 @@
     if (searchMatches.length === 0) return
     searchIndex = (searchIndex - 1 + searchMatches.length) % searchMatches.length
     navigateToMatch(searchIndex)
+  }
+
+  function toggleVoice() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognition) { error = 'Speech recognition not supported in this browser.'; return }
+    if (listening) { recognition?.stop(); listening = false; return }
+    const sr = new SpeechRecognition()
+    sr.lang = 'en-US'
+    sr.interimResults = true
+    sr.continuous = true
+    sr.onresult = (e) => {
+      const text = Array.from(e.results).map(r => r[0].transcript).join(' ')
+      const editor = getCurrentEditor()
+      if (editor) {
+        const { view } = editor.getEditor()
+        const tr = view.state.tr.replaceWith(view.state.selection.from, view.state.selection.to, view.state.schema.text(text + ' '))
+        view.dispatch(tr)
+      }
+    }
+    sr.onerror = () => { listening = false }
+    sr.onend = () => { listening = false }
+    sr.start()
+    recognition = sr
+    listening = true
   }
 
   function toggleSearch() {
@@ -360,7 +409,10 @@
       <button class="icon-btn" onclick={toggleSearch} title="Search (⌘F)">
         <i class="fa-solid fa-magnifying-glass"></i>
       </button>
-      <button class="icon-btn" onclick={organize} disabled={organizing || viewMode !== 'raw'} title="Organize with AI (⌘⇧O)">
+      <button class="icon-btn" onclick={toggleVoice} title={listening ? 'Stop listening' : 'Voice input'}>
+        <i class="fa-solid fa-microphone" class:fa-beat-fade={listening} style={listening ? 'color:var(--accent)' : ''}></i>
+      </button>
+      <button class="icon-btn" onclick={organize} disabled={organizing} title="Organize with AI (⌘⇧O)">
         <i class="fa-solid fa-folder-tree"></i>
       </button>
       <button class="icon-btn" onclick={() => switchView(viewMode === 'raw' ? 'organized' : 'raw')} disabled={!note?.organizedContent} title="Toggle view (⌘⇧V)">
