@@ -26,7 +26,7 @@
   let searchQuery = $state('')
   let searchMatches = $state([])
   let searchIndex = $state(0)
-  let searchInputEl
+  let searchInputEl = $state(null)
 
   const FONTS = ['monospace', 'serif', 'sans-serif']
   let fontIndex = $state(0)
