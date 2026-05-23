@@ -5,9 +5,7 @@
   import Placeholder from '@tiptap/extension-placeholder'
   import TaskList from '@tiptap/extension-task-list'
   import TaskItem from '@tiptap/extension-task-item'
-  import Details from '@tiptap/extension-details'
-  import DetailsContent from '@tiptap/extension-details-content'
-  import DetailsSummary from '@tiptap/extension-details-summary'
+  import { Details, DetailsContent, DetailsSummary } from './toggle.js'
   import SlashCommandExtension from './slash.js'
 
   let { onUpdate, onReady } = $props()

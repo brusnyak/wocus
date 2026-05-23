@@ -16,9 +16,6 @@
   "dependencies": {
     "@tiptap/core": "^3.23.6",
     "@tiptap/extension-code-block-lowlight": "^3.23.6",
-    "@tiptap/extension-details": "^3.23.6",
-    "@tiptap/extension-details-content": "^2.26.2",
-    "@tiptap/extension-details-summary": "^2.26.2",
     "@tiptap/extension-image": "^3.23.6",
     "@tiptap/extension-link": "^3.23.6",
     "@tiptap/extension-placeholder": "^3.23.6",
