@@ -28,7 +28,7 @@
           <h3>AI & Views</h3>
           <div class="grid">
             <span>Organize with AI</span><span><code>Ctrl/Cmd + ⌥ + O</code></span>
-            <span>Toggle Draft / Structured</span><span><code>Ctrl/Cmd + ⌥ + V</code></span>
+            <span>Voice input</span><span>Click <i class="fa-solid fa-microphone"></i></span>
             <span>Voice input</span><span>Click <i class="fa-solid fa-microphone"></i> or system dictation</span>
           </div>
         </section>

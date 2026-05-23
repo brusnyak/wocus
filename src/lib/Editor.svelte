@@ -8,7 +8,7 @@
   import { Details, DetailsContent, DetailsSummary } from './toggle.js'
   import SlashCommandExtension from './slash.js'
 
-  let { onUpdate, onReady, viewMode = 'organized' } = $props()
+  let { onUpdate, onReady } = $props()
 
   let el
   let editor
@@ -33,38 +33,24 @@
       ],
       editorProps: {
         handleDOMEvents: {
-          mousedown: (view, event) => {
-            const arrow = event.target.closest('[data-toggle-arrow]')
-            if (arrow) {
-              event.preventDefault()
-              return true
-            }
-            return false
-          },
           click: (view, event) => {
-            const arrow = event.target.closest('[data-toggle-arrow]')
-            if (arrow) {
+            const details = event.target.closest('details')
+            if (details) {
               event.preventDefault()
-              const details = arrow.closest('details')
-              if (details) {
-                const pos = view.posAtDOM(details, 0)
-                if (pos !== null) {
-                  const resolved = view.state.doc.resolve(pos)
-                  if (resolved.depth >= 1) {
-                    const togglePos = resolved.before(1)
-                    const node = view.state.doc.nodeAt(togglePos)
-                    if (node && node.type.name === 'details') {
-                      const tr = view.state.tr.setNodeMarkup(togglePos, null, { ...node.attrs, open: !node.attrs.open })
-                      view.dispatch(tr)
-                    }
+              const newOpen = !details.open
+              details.open = newOpen
+              const pos = view.posAtDOM(details, 0)
+              if (pos !== null) {
+                const resolved = view.state.doc.resolve(pos)
+                if (resolved.depth >= 1) {
+                  const togglePos = resolved.before(1)
+                  const node = view.state.doc.nodeAt(togglePos)
+                  if (node && node.type.name === 'details') {
+                    const tr = view.state.tr.setNodeMarkup(togglePos, null, { ...node.attrs, open: newOpen })
+                    view.dispatch(tr)
                   }
                 }
               }
-              return true
-            }
-            const summary = event.target.closest('summary')
-            if (summary) {
-              event.preventDefault()
               return true
             }
             return false
@@ -72,6 +58,20 @@
         }
       },
       onUpdate: ({ editor: ed }) => {
+        const { view } = ed
+        view.dom.querySelectorAll('details').forEach(el => {
+          const pos = view.posAtDOM(el, 0)
+          if (pos !== null) {
+            const resolved = view.state.doc.resolve(pos)
+            if (resolved.depth >= 1) {
+              const nodePos = resolved.before(1)
+              const node = view.state.doc.nodeAt(nodePos)
+              if (node && node.type.name === 'details') {
+                el.open = !!node.attrs.open
+              }
+            }
+          }
+        })
         onUpdate?.({
           html: ed.getHTML(),
           json: ed.getJSON(),
@@ -93,7 +93,7 @@
   })
 </script>
 
-<div bind:this={el} class="editor" class:raw-mode={viewMode === 'raw'}></div>
+<div bind:this={el} class="editor"></div>
 
 <style>
   .editor { min-height: 60vh; outline: none; }
@@ -125,32 +125,17 @@
   .editor :global(.ProseMirror ul[data-type="taskList"] li input[type="checkbox"]) { margin: 0; width: 14px; height: 14px; cursor: pointer; }
   .editor :global(.ProseMirror ul[data-type="taskList"] li p) { margin: 0; }
   .editor :global(.ProseMirror details) { margin: 0.5em 0; }
-  .editor :global(.ProseMirror details summary) { cursor: default; font-weight: 600; list-style: none; }
+  .editor :global(.ProseMirror details summary) { cursor: pointer; font-weight: 600; list-style: none; }
   .editor :global(.ProseMirror details summary)::marker,
   .editor :global(.ProseMirror details summary)::-webkit-details-marker { display: none; content: ''; }
   .editor :global(.ProseMirror details > div) { padding-left: 1em; }
   .editor :global(.toggle-arrow) {
-    display: inline-block; cursor: pointer; user-select: none;
+    display: inline-block; user-select: none;
     width: 1em; text-align: center; font-size: 0.7em;
     transition: transform 0.15s; color: var(--muted);
     vertical-align: middle; margin-right: 2px;
   }
   .editor :global(details[open] > summary .toggle-arrow) { transform: rotate(90deg); }
-  .editor :global(.toggle-arrow:hover) { color: var(--fg); }
-
-  /* Raw mode flattening */
-  .editor.raw-mode :global(.ProseMirror h1),
-  .editor.raw-mode :global(.ProseMirror h2),
-  .editor.raw-mode :global(.ProseMirror h3) {
-    font-size: 1em; font-weight: bold; margin: 0.5em 0; letter-spacing: normal;
-  }
-  .editor.raw-mode :global(.ProseMirror details) { display: block; }
-  .editor.raw-mode :global(.ProseMirror details > div) { padding-left: 0; }
-  .editor.raw-mode :global(.ProseMirror details summary) { cursor: default; font-weight: normal; }
-  .editor.raw-mode :global(.ProseMirror details summary)::marker,
-  .editor.raw-mode :global(.ProseMirror details summary)::-webkit-details-marker { display: none; content: ''; }
-  .editor.raw-mode :global(.toggle-arrow) { display: none; }
-  .editor.raw-mode :global(.ProseMirror ul[data-type="taskList"] li input[type="checkbox"]) { display: none; }
 
   :global(.slash-item) {
     display: flex; align-items: center; gap: 8px; width: 100%;

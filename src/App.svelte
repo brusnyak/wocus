@@ -11,7 +11,6 @@
   import Sidebar from './lib/Sidebar.svelte'
 
   let s = getSettings()
-  let viewMode = $state('raw')
   let settingsOpen = $state(false)
   let helpOpen = $state(false)
   let aboutOpen = $state(false)
@@ -43,8 +42,6 @@
   let font = $derived(FONTS[fontIndex])
 
   let saveTimer
-  let organizerPrompt = $state({ show: false, text: '' })
-  let alwaysOrganize = $state(false)
 
   $effect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -55,23 +52,17 @@
     const n = await ensureNote()
     themeIndex = THEMES.indexOf(s.darkMode ? 'dark' : 'light')
     if (themeIndex === -1) themeIndex = 0
+    // Migrate old schema
+    if (!n.content && (n.rawContent || n.organizedContent)) {
+      n.content = n.organizedContent || n.rawContent || ''
+      n.html = n.organizedHtml || n.rawHtml || ''
+      n.text = n.organizedText || n.rawText || ''
+    }
+    if (!n.content) n.content = ''
+    if (!n.text) n.text = ''
     note = n
-    updateCounts(n.content ? textFromJson(n.content) : '')
+    updateCounts(note.text)
     loaded = true
-  }
-
-  function textFromJson(jsonStr) {
-    if (!jsonStr) return ''
-    try {
-      const data = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr
-      if (data.type === 'doc' && data.content) {
-        return data.content.map(b => {
-          const t = b.content ? (Array.isArray(b.content) ? b.content.map(c => c.text || '').join('') : b.content) : ''
-          return t
-        }).filter(t => t).join('\n\n')
-      }
-      return ''
-    } catch { return '' }
   }
 
   function updateCounts(text) {
@@ -95,7 +86,7 @@
     queueSave()
   }
 
-  function blockToTipTapNode(b) {
+  function blocksToTipTapNode(b) {
     const text = (b.content || '').toString()
     switch (b.type) {
       case 'heading':
@@ -136,7 +127,7 @@
   }
 
   function blocksToTipTapJson(blocks) {
-    return { type: 'doc', content: blocks.map(blockToTipTapNode) }
+    return { type: 'doc', content: blocks.map(blocksToTipTapNode) }
   }
 
   function blocksToHtml(blocks) {
@@ -181,39 +172,28 @@
   }
 
   $effect(() => {
-    if (viewMode === 'organized' && note?.content) {
+    if (note?.content) {
       headingElements = extractSections(note.content).map(s => s.heading)
     } else { headingElements = [] }
   })
 
-  function hasStructure(jsonStr) {
-    if (!jsonStr) return false
-    try {
-      const data = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr
-      const blocks = data.content || []
-      return blocks.some(b => ['heading', 'details', 'taskList', 'horizontalRule', 'bulletList', 'orderedList', 'codeBlock'].includes(b.type)
-        && b.type !== 'paragraph')
-    } catch { return false }
-  }
-
   async function organize() {
     if (!s.hasApiKey()) { error = 'Add an API key in Settings first.'; return }
-    const latestText = note?.text || note?.rawText || ''
+    const latestText = note?.text || ''
     if (!latestText) { error = 'Nothing to organize — write some text first.'; return }
     organizing = true; error = ''
     try {
       const result = await organizeWithAI(latestText, {
         apiEndpoint: s.apiEndpoint, apiKey: s.apiKey, modelName: s.modelName
       })
-      if (result?.blocks) {
+      if (result?.blocks && result.blocks.length > 0) {
         const tipTapJson = blocksToTipTapJson(result.blocks)
         note.content = JSON.stringify(tipTapJson)
         note.html = blocksToHtml(result.blocks)
         note.text = result.blocks.map(b => b.content || '').join('\n')
         await saveNote($state.snapshot(note))
-        viewMode = 'organized'
         requestAnimationFrame(() => loadContent())
-      } else { error = 'AI returned unexpected format.' }
+      } else { error = 'AI returned empty content. Try again.' }
     } catch (e) { error = e.message || 'Failed to organize' }
     organizing = false
   }
@@ -221,50 +201,13 @@
   function loadContent() {
     if (!editorApi) return
     if (note?.content) {
-      try { editorApi.setContent(JSON.parse(note.content)) } catch { editorApi.setContent('') }
-    } else { editorApi.setContent('') }
+      try { editorApi.setContent(JSON.parse(note.content)) } catch { }
+    }
   }
 
   function handleReady(api) {
     editorApi = api
     loadContent()
-  }
-
-  function switchMode(mode) {
-    if (mode === 'organized' && note?.content) {
-      const text = textFromJson(note.content)
-      if (text && !hasStructure(note.content)) {
-        if (s.autoOrganize) {
-          organize()
-          viewMode = 'organized'
-          return
-        }
-        organizerPrompt = { show: true, text }
-        return
-      }
-    }
-    viewMode = mode
-  }
-
-  function handleOrganizeConfirm() {
-    const txt = organizerPrompt.text
-    organizerPrompt = { show: false, text: '' }
-    if (alwaysOrganize) {
-      s.autoOrganize = true
-      s.save()
-      alwaysOrganize = false
-    }
-    organize()
-  }
-
-  function handleOrganizeSkip() {
-    if (alwaysOrganize) {
-      s.autoOrganize = true
-      s.save()
-      alwaysOrganize = false
-    }
-    organizerPrompt = { show: false, text: '' }
-    viewMode = 'organized'
   }
 
   function handleNavigate(index) {
@@ -393,7 +336,6 @@
     if (mod && e.altKey) {
       switch (e.key) {
         case 'o': e.preventDefault(); organize(); break
-        case 'v': e.preventDefault(); switchMode(viewMode === 'raw' ? 'organized' : 'raw'); break
         case 'e': e.preventDefault(); cycleTheme(); break
         case 'a': e.preventDefault(); cycleFont(); break
         case 'f': e.preventDefault(); toggleFullscreen(); break
@@ -422,16 +364,8 @@
       </div>
     {/if}
 
-    <div class="mode-label" onclick={() => switchMode(viewMode === 'raw' ? 'organized' : 'raw')} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && switchMode(viewMode === 'raw' ? 'organized' : 'raw')}>
-      {#if viewMode === 'raw'}
-        <i class="fa-solid fa-pen-fancy"></i> Draft
-      {:else}
-        <i class="fa-solid fa-folder-tree"></i> Structured
-      {/if}
-    </div>
-
     <section><article class="editor-wrap">
-      <Editor onUpdate={handleUpdate} onReady={handleReady} {viewMode} />
+      <Editor onUpdate={handleUpdate} onReady={handleReady} />
     </article></section>
 
     <div class="icons-top">
@@ -443,13 +377,6 @@
       </button>
       <button class="icon-btn" onclick={organize} disabled={organizing} title="Organize with AI (⌘⌥O)">
         <i class="fa-solid fa-folder-tree"></i>
-      </button>
-      <button class="icon-btn" onclick={() => switchMode(viewMode === 'raw' ? 'organized' : 'raw')} title="Toggle view (⌘⌥V)">
-        {#if viewMode === 'raw'}
-          <i class="fa-solid fa-toggle-off"></i>
-        {:else}
-          <i class="fa-solid fa-toggle-on"></i>
-        {/if}
       </button>
       <button class="icon-btn" onclick={() => settingsOpen = true} title="Settings">
         <i class="fa-solid fa-gear"></i>
@@ -466,7 +393,7 @@
       <button class="icon-btn" onclick={printText} title="Print (⌘P)">
         <i class="fa-solid fa-print"></i>
       </button>
-      <button class="icon-btn" onclick={toggleFullscreen} title="Fullscreen (⌘⇧F)">
+      <button class="icon-btn" onclick={toggleFullscreen} title="Fullscreen (⌘⌥F)">
         <i class="fa-solid fa-expand"></i>
       </button>
     </div>
@@ -510,7 +437,7 @@
     <div class="word-count">{charCount} / {wordCount}</div>
 
     <div class="icons-bottom-right">
-      <button class="icon-btn" onclick={() => helpOpen = true} title="Help (?)">
+      <button class="icon-btn" onclick={() => helpOpen = true} title="Help">
         <i class="fa-regular fa-circle-question"></i>
       </button>
       <button class="icon-btn" onclick={() => aboutOpen = true} title="About">
@@ -518,30 +445,11 @@
       </button>
     </div>
 
-    {#if viewMode === 'organized' && headingElements.length > 0}
+    {#if headingElements.length > 0}
       <Sidebar {headings} onNavigate={handleNavigate} />
     {/if}
 
     <SettingsModal open={settingsOpen} onclose={() => settingsOpen = false} />
-
-    {#if organizerPrompt.show}
-      <div class="overlay" onclick={() => organizerPrompt = { show: false, text: '' }} onkeydown={(e) => e.key === 'Escape' && (organizerPrompt = { show: false, text: '' })} role="dialog" tabindex="-1">
-        <div class="organizer-modal" onclick={(e) => e.stopPropagation()} role="presentation">
-          <div class="organizer-body">
-            <p>This content has no structure yet. Organize it with AI?</p>
-            <label class="always-check">
-              <input type="checkbox" bind:checked={alwaysOrganize} />
-              <span>Always organize — don't ask again</span>
-            </label>
-          </div>
-          <div class="organizer-actions">
-            <button class="btn secondary" onclick={handleOrganizeSkip}>Skip</button>
-            <button class="btn primary" onclick={handleOrganizeConfirm}>Organize</button>
-          </div>
-        </div>
-      </div>
-    {/if}
-
     <HelpModal open={helpOpen} onclose={() => helpOpen = false} />
     <AboutModal open={aboutOpen} onclose={() => aboutOpen = false} />
   </div>
@@ -563,16 +471,6 @@
   .app-shell.font-sans { font-family: Roboto, Arial, Helvetica, sans-serif; }
   section { max-width: 800px; margin: auto; line-height: 1.8; font-size: 16px; }
   .editor-wrap { min-height: 80vh; }
-
-  .mode-label {
-    position: fixed; top: 16px; left: 20px;
-    display: flex; align-items: center; gap: 6px;
-    font-size: 0.75em; color: var(--muted); opacity: 0.4;
-    cursor: pointer; z-index: 50;
-    transition: opacity 0.2s; user-select: none;
-    font-family: 'Roboto Mono', monospace;
-  }
-  .mode-label:hover { opacity: 0.8; color: var(--fg); }
 
   .error-toast {
     position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
@@ -653,40 +551,5 @@
   }
   .search-nav:hover, .search-close:hover { color: var(--fg); }
   .search-nav:disabled { opacity: 0.25; cursor: default; }
-  .overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.4);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 200;
-  }
-  .organizer-modal {
-    background: var(--surface); border-radius: 12px;
-    width: 400px; max-width: 90vw;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.15);
-  }
-  .organizer-body { padding: 24px 24px 16px; }
-  .organizer-body p { margin: 0 0 12px; font-size: 0.9em; line-height: 1.5; }
-  .always-check {
-    display: flex; align-items: center; gap: 8px;
-    font-size: 0.8em; color: var(--muted); cursor: pointer;
-  }
-  .always-check input { cursor: pointer; }
-  .organizer-actions {
-    display: flex; justify-content: flex-end; gap: 8px;
-    padding: 12px 24px 20px;
-  }
-  .btn {
-    padding: 8px 20px; border-radius: 8px; border: 1px solid var(--border);
-    font-size: 0.85em; font-family: inherit; cursor: pointer;
-    transition: background 0.15s;
-  }
-  .btn.primary {
-    background: var(--accent); color: #fff; border-color: var(--accent);
-  }
-  .btn.primary:hover { opacity: 0.9; }
-  .btn.secondary {
-    background: none; color: var(--fg);
-  }
-  .btn.secondary:hover { background: var(--hover); }
-
   @media (max-width: 768px) { .app-shell { padding: 30px 20px; } }
 </style>
