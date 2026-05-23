@@ -42,15 +42,24 @@
   async function handleSave() {
     s.provider = activeProvider
     s.apiEndpoint = isCustom ? customEndpoint : endpoint
-    s.apiKey = key
+    s.apiKey = key.trim()
     s.modelName = model
     await s.save()
     onclose?.()
   }
 
   async function testConnection() {
-    if (!key) {
+    const cleanKey = key.trim()
+    if (cleanKey && !cleanKey.startsWith('sk-') && activeProvider === 'openrouter') {
+      testResult = '⚠️ Keys usually start with sk- — make sure you pasted the full key'
+    }
+    if (!cleanKey) {
       testResult = '❌ Enter an API key first'
+      return
+    }
+    if (!model || model === 'openrouter-free') {
+      testResult = '⚠️ "openrouter-free" is not a valid model. Try openrouter/auto or model:free (e.g. mistralai/mistral-7b-instruct:free)'
+      testing = false
       return
     }
     testing = true
@@ -63,7 +72,7 @@
         : { model, messages: [{ role: 'user', content: 'Say "ok" and nothing else.' }], max_tokens: 10 }
       const headers = {
         'Content-Type': 'application/json',
-        ...(isOllama ? {} : { 'Authorization': `Bearer ${key}` })
+        ...(isOllama ? {} : { 'Authorization': `Bearer ${cleanKey}` })
       }
       const res = await fetch(ep, { method: 'POST', headers, body: JSON.stringify(body) })
       if (res.ok) {
@@ -119,7 +128,7 @@
 
         <label class="field">
           <span>Model</span>
-          <input type="text" bind:value={model} list="model-suggestions" placeholder={activeProvider === 'ollama' ? 'llama3, mistral, ...' : 'Enter model name'} />
+          <input type="text" bind:value={model} list="model-suggestions" placeholder={activeProvider === 'openrouter' ? 'openrouter/auto, model:free, ...' : activeProvider === 'ollama' ? 'llama3, mistral, ...' : 'gpt-4o, ...'} />
           {#if currentModels.length > 0}
             <datalist id="model-suggestions">
               {#each currentModels as m}

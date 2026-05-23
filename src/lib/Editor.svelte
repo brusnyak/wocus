@@ -12,6 +12,7 @@
 
   let el
   let editor
+  let toggleHandler
 
   onMount(() => {
     const tipTap = new Editor({
@@ -40,6 +41,16 @@
       }
     })
 
+    toggleHandler = (e) => {
+      const summary = e.target.closest('summary')
+      if (summary) {
+        e.stopPropagation()
+        const details = summary.closest('details')
+        if (details) details.open = !details.open
+      }
+    }
+    tipTap.view.dom.addEventListener('click', toggleHandler, true)
+
     onReady?.({
       getText: () => tipTap.getText(),
       getHTML: () => tipTap.getHTML(),
@@ -49,7 +60,10 @@
       getEditor: () => tipTap
     })
 
-    return () => tipTap.destroy()
+    return () => {
+      tipTap.view.dom.removeEventListener('click', toggleHandler, true)
+      tipTap.destroy()
+    }
   })
 </script>
 

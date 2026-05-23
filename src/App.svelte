@@ -145,25 +145,34 @@
     }).join('')
   }
 
-  function extractHeadingsFromJson(jsonStr) {
+  function extractSections(jsonStr) {
     if (!jsonStr) return []
     try {
       const data = JSON.parse(jsonStr)
       const blocks = Array.isArray(data) ? data : (data.content || [])
-      return blocks
-        .filter(b => b.type === 'heading' && (b.level === 1 || b.level === 2))
-        .map(b => {
+      const sections = []
+      let currentSection = { heading: null, index: 0 }
+      blocks.forEach((b, i) => {
+        if (b.type === 'divider' || b.type === 'horizontalRule') {
+          sections.push({ ...currentSection, isDivider: true })
+          currentSection = { heading: null, index: i + 1 }
+        } else if (b.type === 'heading' && (b.level === 1 || b.level === 2)) {
           const text = b.content
             ? (Array.isArray(b.content) ? b.content.map(c => c.text || '').join('') : b.content)
             : ''
-          return { level: b.level || 1, content: text }
-        })
+          currentSection.heading = { level: b.level || 1, content: text, blockIndex: i }
+        }
+      })
+      if (currentSection.heading || sections.length === 0) {
+        sections.push(currentSection)
+      }
+      return sections.filter(s => s.heading)
     } catch { return [] }
   }
 
   $effect(() => {
     if (viewMode === 'organized' && note?.organizedContent) {
-      headingElements = extractHeadingsFromJson(note.organizedContent)
+      headingElements = extractSections(note.organizedContent).map(s => s.heading)
     } else { headingElements = [] }
   })
 
