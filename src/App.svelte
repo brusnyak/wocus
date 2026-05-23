@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { TextSelection } from '@tiptap/pm/state'
-  import { ensureNote, saveNote } from './lib/db.js'
+  import { ensureNote, saveNote, getDb } from './lib/db.js'
   import { getSettings } from './lib/settings.svelte.js'
   import { organizeWithAI } from './lib/ai.js'
   import Editor from './lib/Editor.svelte'
@@ -39,6 +39,11 @@ let charCount = $state(0)
 let wordCount = $state(0)
 let uiHidden = $state(false)
 let lastActivity = $state(Date.now())
+let fileInput = $state(null)
+let showTemplateMenu = $state(false)
+let showLoadTemplate = $state(false)
+let templateName = $state('')
+let templates = $state([])
 
   $effect(() => {
     document.documentElement.classList.toggle('ui-hidden', uiHidden)
@@ -190,7 +195,7 @@ let font = $derived(FONTS[fontIndex])
     organizing = true; error = ''
     try {
       const result = await organizeWithAI(latestText, {
-        apiEndpoint: s.apiEndpoint, apiKey: s.apiKey, modelName: s.modelName
+        apiEndpoint: s.apiEndpoint, apiKey: s.apiKey, modelName: s.modelName, linkAnalysis: s.linkAnalysis
       })
       if (result?.blocks && result.blocks.length > 0) {
         const tipTapJson = blocksToTipTapJson(result.blocks)
@@ -366,6 +371,80 @@ let font = $derived(FONTS[fontIndex])
     else document.exitFullscreen()
   }
 
+  async function exportMarkdown() {
+    const TurndownService = (await import('turndown')).default
+    const turndown = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced' })
+    const md = turndown.turndown(note?.html || '')
+    const blob = new Blob([md], { type: 'text/markdown' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'wocus-note.md'; a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  function importMarkdown() {
+    fileInput?.click()
+  }
+
+  async function handleFileImport(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const text = await file.text()
+    const { marked } = await import('marked')
+    const html = await marked.parse(text)
+    if (editorApi) {
+      editorApi.setContent(html)
+      const div = document.createElement('div')
+      div.innerHTML = html
+      const plainText = div.textContent || ''
+      note.text = plainText
+      note.html = html
+      updateCounts(plainText)
+      queueSave()
+    }
+    e.target.value = ''
+  }
+
+  async function loadTemplates() {
+    const db = await getDb()
+    const all = await db.getAll('templates')
+    templates = all.sort((a, b) => b.createdAt - a.createdAt)
+  }
+
+  async function saveTemplate() {
+    const name = templateName.trim()
+    if (!name || !note) return
+    const db = await getDb()
+    await db.put('templates', {
+      id: Date.now().toString(),
+      name,
+      content: note.content,
+      html: note.html,
+      text: note.text,
+      createdAt: Date.now()
+    })
+    templateName = ''
+    showTemplateMenu = false
+    await loadTemplates()
+  }
+
+  async function applyTemplate(t) {
+    if (!editorApi) return
+    try { editorApi.setContent(JSON.parse(t.content)) } catch { editorApi.setContent(t.html) }
+    note.content = t.content
+    note.html = t.html
+    note.text = t.text
+    updateCounts(t.text)
+    queueSave()
+    showLoadTemplate = false
+  }
+
+  async function deleteTemplate(id) {
+    const db = await getDb()
+    await db.delete('templates', id)
+    await loadTemplates()
+  }
+
   function handleKeydown(e) {
     const mod = e.metaKey || e.ctrlKey
     if (mod && e.altKey) {
@@ -425,37 +504,72 @@ let font = $derived(FONTS[fontIndex])
        <Editor onUpdate={handleUpdate} onReady={handleReady} />
      </article></section>
 
-     {#if !uiHidden}
+{#if !uiHidden}
      <div class="icons-top">
-       <button class="icon-btn" onclick={toggleSearch} title="Search (⌘F)">
-         <i class="fa-solid fa-magnifying-glass"></i>
-       </button>
-       <button class="icon-btn" onclick={toggleVoice} title={listening ? 'Stop listening' : 'Voice input'}>
-         <i class="fa-solid fa-microphone" class:fa-beat-fade={listening} style={listening ? 'color:var(--accent)' : ''}></i>
-       </button>
-       <button class="icon-btn" onclick={organize} disabled={organizing} title="Organize with AI (⌘⌥O)">
-         <i class="fa-solid fa-folder-tree"></i>
-       </button>
-       <button class="icon-btn" onclick={() => settingsOpen = true} title="Settings">
-         <i class="fa-solid fa-gear"></i>
-       </button>
-       <button class="icon-btn" onclick={cycleTheme} title="Theme (⌘⌥E)">
-         <i class="fa-solid fa-circle-half-stroke"></i>
-       </button>
-       <button class="icon-btn" onclick={cycleFont} title="Font (⌘⌥A)">
-         <i class="fa-solid fa-font"></i>
-       </button>
-       <button class="icon-btn" onclick={downloadText} title="Download (⌘S)">
-         <i class="fa-solid fa-download"></i>
-       </button>
-       <button class="icon-btn" onclick={printText} title="Print (⌘P)">
-         <i class="fa-solid fa-print"></i>
-       </button>
-       <button class="icon-btn" onclick={toggleFullscreen} title="Fullscreen (⌘⌥F)">
-         <i class="fa-solid fa-expand"></i>
-       </button>
-     </div>
-     {/if}
+        <button class="icon-btn" onclick={toggleSearch} title="Search (⌘F)">
+          <i class="fa-solid fa-magnifying-glass"></i>
+        </button>
+        <button class="icon-btn" onclick={toggleVoice} title={listening ? 'Stop listening' : 'Voice input'}>
+          <i class="fa-solid fa-microphone" class:fa-beat-fade={listening} style={listening ? 'color:var(--accent)' : ''}></i>
+        </button>
+        <button class="icon-btn" onclick={organize} disabled={organizing} title="Organize with AI (⌘⌥O)">
+          <i class="fa-solid fa-folder-tree"></i>
+        </button>
+        <button class="icon-btn" onclick={exportMarkdown} title="Export Markdown">
+          <i class="fa-solid fa-file-export"></i>
+        </button>
+        <button class="icon-btn" onclick={importMarkdown} title="Import Markdown">
+          <i class="fa-solid fa-file-import"></i>
+        </button>
+        <button class="icon-btn" onclick={() => { templateName = ''; showTemplateMenu = !showTemplateMenu }} title="Save as template">
+          <i class="fa-regular fa-floppy-disk"></i>
+        </button>
+        <button class="icon-btn" onclick={async () => { await loadTemplates(); showLoadTemplate = !showLoadTemplate }} title="Load template">
+          <i class="fa-regular fa-copy"></i>
+        </button>
+        <button class="icon-btn" onclick={() => settingsOpen = true} title="Settings">
+          <i class="fa-solid fa-gear"></i>
+        </button>
+        <button class="icon-btn" onclick={cycleTheme} title="Theme (⌘⌥E)">
+          <i class="fa-solid fa-circle-half-stroke"></i>
+        </button>
+        <button class="icon-btn" onclick={cycleFont} title="Font (⌘⌥A)">
+          <i class="fa-solid fa-font"></i>
+        </button>
+        <button class="icon-btn" onclick={downloadText} title="Download (⌘S)">
+          <i class="fa-solid fa-download"></i>
+        </button>
+        <button class="icon-btn" onclick={printText} title="Print (⌘P)">
+          <i class="fa-solid fa-print"></i>
+        </button>
+        <button class="icon-btn" onclick={toggleFullscreen} title="Fullscreen (⌘⌥F)">
+          <i class="fa-solid fa-expand"></i>
+        </button>
+      </div>
+      <input type="file" accept=".md,.markdown" bind:this={fileInput} onchange={handleFileImport} style="display:none" />
+      {#if showTemplateMenu}
+        <div class="template-save-popup">
+          <input type="text" bind:value={templateName} placeholder="Template name..." onkeydown={(e) => e.key === 'Enter' && saveTemplate()} />
+          <button class="icon-btn" onclick={saveTemplate} title="Save"><i class="fa-solid fa-check"></i></button>
+        </div>
+      {/if}
+      {#if showLoadTemplate}
+        <div class="template-load-popup">
+          <h3>Templates</h3>
+          {#if templates.length === 0}
+            <p class="empty-msg">No saved templates yet.</p>
+          {:else}
+            {#each templates as t}
+              <div class="template-item">
+                <span class="template-name">{t.name}</span>
+                <button class="icon-btn" onclick={() => applyTemplate(t)} title="Apply"><i class="fa-solid fa-check"></i></button>
+                <button class="icon-btn" onclick={() => deleteTemplate(t.id)} title="Delete"><i class="fa-solid fa-trash-can"></i></button>
+              </div>
+            {/each}
+          {/if}
+        </div>
+      {/if}
+      {/if}
 
      {#if !uiHidden && searchOpen}
      <div class="search-bar">
@@ -555,21 +669,142 @@ let font = $derived(FONTS[fontIndex])
 .icon-btn:hover { color: var(--fg); }
 .icon-btn:disabled { opacity: 0.25; cursor: default; }
 
-.icons-top,
-.icons-bottom-right,
-.search-bar,
-.voice-indicator,
-.word-count { 
-    transition: opacity 0.3s ease, transform 0.3s ease; 
+.icons-top {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 50;
+    transition: opacity 0.3s ease, transform 0.3s ease;
     opacity: 1;
     transform: translateY(0);
 }
 
-.ui-hidden .icons-top,
-.ui-hidden .icons-bottom-right,
-.ui-hidden .search-bar,
-.ui-hidden .voice-indicator,
-.ui-hidden .word-count {
+.icons-bottom-right {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 50;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.word-count {
+    position: fixed;
+    bottom: 16px;
+    left: 16px;
+    font-size: 0.75em;
+    color: var(--muted);
+    z-index: 50;
+    font-family: 'Roboto Mono', monospace;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.search-bar {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    z-index: 60;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    opacity: 1;
+}
+.search-bar input {
+    border: none; background: none; outline: none;
+    color: var(--fg); font-size: 0.85em; width: 180px;
+    font-family: inherit;
+}
+.search-count { font-size: 0.75em; color: var(--muted); white-space: nowrap; }
+.search-count.no-matches { color: var(--error-color); }
+.search-nav, .search-close {
+    background: none; border: none; cursor: pointer;
+    color: var(--muted); padding: 2px 4px; font-size: 0.85em;
+}
+.search-nav:hover, .search-close:hover { color: var(--fg); }
+.search-nav:disabled { opacity: 0.25; cursor: default; }
+
+.voice-indicator {
+    position: fixed;
+    bottom: 48px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    z-index: 60;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    opacity: 1;
+}
+.voice-interim { font-size: 0.8em; color: var(--muted); font-style: italic; }
+.voice-hint { font-size: 0.8em; color: var(--accent); }
+
+.template-save-popup {
+    position: fixed;
+    top: 16px;
+    right: 56px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    z-index: 55;
+}
+.template-save-popup input {
+    border: none; background: none; outline: none;
+    color: var(--fg); font-size: 0.85em; width: 160px;
+    font-family: inherit;
+}
+
+.template-load-popup {
+    position: fixed;
+    top: 16px;
+    right: 56px;
+    min-width: 220px;
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    z-index: 55;
+}
+.template-load-popup h3 { margin: 0 0 8px 0; font-size: 0.9em; font-weight: 600; }
+.template-load-popup .empty-msg { font-size: 0.8em; color: var(--muted); margin: 0; }
+.template-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 0;
+}
+.template-item .template-name { flex: 1; font-size: 0.85em; }
+.template-item .icon-btn { width: 24px; height: 24px; font-size: 12px; }
+
+:global(.ui-hidden) .icons-top,
+:global(.ui-hidden) .icons-bottom-right,
+:global(.ui-hidden) .search-bar,
+:global(.ui-hidden) .voice-indicator,
+:global(.ui-hidden) .word-count {
     opacity: 0;
     transform: translateY(-10px);
     pointer-events: none;

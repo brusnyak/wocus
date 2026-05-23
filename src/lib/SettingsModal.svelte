@@ -138,6 +138,17 @@
           {/if}
         </label>
 
+        <label class="field toggle-field">
+          <span class="toggle-label">
+            <span>Link Context Analysis</span>
+            <span class="toggle-desc">When enabled, AI analyzes URLs in your notes and provides mini-summaries</span>
+          </span>
+          <label class="switch">
+            <input type="checkbox" checked={s.linkAnalysis} onchange={(e) => s.linkAnalysis = e.target.checked} />
+            <span class="slider"></span>
+          </label>
+        </label>
+
         <button class="test-btn" onclick={testConnection} disabled={testing}>
           {testing ? 'Testing...' : 'Test Connection'}
         </button>
@@ -230,7 +241,52 @@
     font-family: 'Roboto Mono', monospace;
     font-size: 0.8em;
   }
-  .test-btn {
+  .toggle-field {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+.toggle-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.toggle-desc {
+    font-size: 0.78em;
+    color: var(--muted);
+    font-weight: 400;
+}
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    flex-shrink: 0;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background: var(--border);
+    border-radius: 20px;
+    transition: 0.2s;
+}
+.slider::before {
+    content: '';
+    position: absolute;
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: 0.2s;
+}
+.switch input:checked + .slider { background: var(--accent); }
+.switch input:checked + .slider::before { transform: translateX(16px); }
+
+.test-btn {
     padding: 8px 14px;
     border: 1px solid var(--border);
     border-radius: 6px;

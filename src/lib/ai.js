@@ -1,4 +1,4 @@
-const SYSTEM_PROMPT = `You are a text organization assistant. Analyze the provided text and return a structured version.
+const BASE_PROMPT = `You are a text organization assistant. Analyze the provided text and return a structured version.
 
 Rules:
 1. Identify distinct topics and group related paragraphs
@@ -7,8 +7,13 @@ Rules:
 4. Insert dividers between every major topic to create clear sections — each divider signals a new topic group
 5. Convert action items to todo checkboxes
 6. Fix grammar and flow while preserving meaning
-7. Return ONLY valid JSON — no markdown fences, no explanation
+7. Return ONLY valid JSON — no markdown fences, no explanation`
 
+const LINK_PROMPT = `
+8. For any URLs found in the text, analyze the link context and provide a brief mini-summary of what the linked content is about based on the surrounding text
+9. If a URL appears, replace it with a markdown-style link [description](url) where description is a short contextual summary`
+
+const BASE_FORMAT = `
 Response format:
 {
   "blocks": [
@@ -24,31 +29,29 @@ Response format:
   ]
 }`
 
+function buildPrompt(text, linkAnalysis) {
+  let prompt = BASE_PROMPT
+  if (linkAnalysis) prompt += LINK_PROMPT
+  prompt += BASE_FORMAT
+  return prompt
+}
+
 export function extractJsonFromResponse(text) {
-  // Try to find JSON in the response
   let cleaned = text.trim()
-  
-  // First, try to extract JSON from markdown code blocks
   const jsonMatch = cleaned.match(/```(?:json)?\s*\n?([\s\S]*?)```/)
   if (jsonMatch) {
     cleaned = jsonMatch[1].trim()
   }
-  
-  // Try to parse the cleaned text as JSON
   try {
     return JSON.parse(cleaned)
   } catch (e) {
-    // If that fails, try to find JSON object boundaries
     const braceStart = cleaned.indexOf('{')
     const braceEnd = cleaned.lastIndexOf('}')
-    
     if (braceStart !== -1 && braceEnd !== -1 && braceEnd > braceStart) {
       const jsonText = cleaned.slice(braceStart, braceEnd + 1)
       try {
         return JSON.parse(jsonText)
       } catch (e2) {
-        // If still failing, try to find the longest valid JSON substring
-        // by removing characters from the ends
         for (let i = 0; i < jsonText.length; i++) {
           for (let j = jsonText.length; j > i; j--) {
             const substring = jsonText.substring(i, j)
@@ -59,17 +62,19 @@ export function extractJsonFromResponse(text) {
         }
       }
     }
-    
     throw new Error('AI returned invalid JSON')
   }
 }
 
 export async function organizeWithAI(text, settings) {
   const { apiEndpoint, apiKey, modelName } = settings
+  const linkAnalysis = settings.linkAnalysis !== false
 
   if (!apiKey) {
     throw new Error('No API key configured. Add one in Settings.')
   }
+
+  const SYSTEM_PROMPT = buildPrompt(text, linkAnalysis)
 
   const isOllama = apiEndpoint.includes('localhost') || apiEndpoint.includes('0.0.0.0')
   const body = isOllama

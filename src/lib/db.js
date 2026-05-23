@@ -1,7 +1,7 @@
 import { openDB } from 'idb'
 
 const DB_NAME = 'wocus'
-const DB_VERSION = 1
+const DB_VERSION = 2
 
 let dbPromise
 
@@ -15,6 +15,9 @@ export function getDb() {
         }
         if (!db.objectStoreNames.contains('settings')) {
           db.createObjectStore('settings', { keyPath: 'key' })
+        }
+        if (!db.objectStoreNames.contains('templates')) {
+          db.createObjectStore('templates', { keyPath: 'id' })
         }
       }
     })
