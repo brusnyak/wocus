@@ -35,11 +35,15 @@
   const THEMES = ['light', 'dark', 'solarized']
   let themeIndex = $state(0)
 
-  let charCount = $state(0)
-  let wordCount = $state(0)
+let charCount = $state(0)
+let wordCount = $state(0)
+let uiHidden = $state(false)
+let lastActivity = $state(Date.now())
 
-  let theme = $derived(THEMES[themeIndex])
-  let font = $derived(FONTS[fontIndex])
+$: document.documentElement.classList.toggle('ui-hidden', uiHidden)
+
+let theme = $derived(THEMES[themeIndex])
+let font = $derived(FONTS[fontIndex])
 
   let saveTimer
 
@@ -261,40 +265,69 @@
     navigateToMatch(searchIndex)
   }
 
-  function toggleVoice() {
-    if (listening) { recognition?.stop(); listening = false; interimText = ''; return }
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SpeechRecognition) { error = 'Speech recognition not supported in this browser.'; return }
-    const sr = new SpeechRecognition()
-    sr.lang = 'en-US'
-    sr.interimResults = true
-    sr.continuous = true
-    let finalizedText = ''
-    sr.onresult = (e) => {
-      let interim = ''
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const transcript = e.results[i][0].transcript
-        if (e.results[i].isFinal) {
-          finalizedText += transcript + ' '
-        } else {
-          interim += transcript
-        }
-      }
-      interimText = interim
-      const editor = getCurrentEditor()
-      if (editor && finalizedText) {
-        const { view } = editor.getEditor()
-        const tr = view.state.tr.insertText(finalizedText, view.state.selection.to)
-        view.dispatch(tr)
-        finalizedText = ''
-      }
-    }
-    sr.onerror = () => { listening = false; interimText = '' }
-    sr.onend = () => { listening = false; interimText = '' }
-    sr.start()
-    recognition = sr
-    listening = true
-  }
+   function toggleVoice() {
+     if (listening) {
+       if (recognition) {
+         recognition.stop()
+         recognition = null
+       }
+       listening = false
+       interimText = ''
+       return
+     }
+     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+     if (!SpeechRecognition) {
+       error = 'Speech recognition not supported in this browser.'
+       return
+     }
+     const sr = new SpeechRecognition()
+     sr.lang = 'en-US'
+     sr.interimResults = true
+     sr.continuous = true
+     let finalizedText = ''
+     sr.onresult = (e) => {
+       let interim = ''
+       for (let i = e.resultIndex; i < e.results.length; i++) {
+         const transcript = e.results[i][0].transcript
+         if (e.results[i].isFinal) {
+           finalizedText += transcript + ' '
+         } else {
+           interim += transcript
+         }
+       }
+       interimText = interim
+       const editor = getCurrentEditor()
+       if (editor && finalizedText.trim()) {
+         const { view } = editor.getEditor()
+         const tr = view.state.tr.insertText(finalizedText, view.state.selection.to)
+         view.dispatch(tr)
+         finalizedText = ''
+       }
+     }
+     sr.onerror = (e) => {
+       console.error('Speech recognition error:', e)
+       listening = false
+       interimText = ''
+       if (recognition === sr) {
+         recognition = null
+       }
+       // Don't set error here to avoid spamming UI with frequent errors
+       // Only set error for permanent issues
+       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+         error = 'Speech recognition access denied. Please check browser permissions.'
+       }
+     }
+     sr.onend = () => {
+       listening = false
+       interimText = ''
+       if (recognition === sr) {
+         recognition = null
+       }
+     }
+     sr.start()
+     recognition = sr
+     listening = true
+   }
 
   function toggleSearch() {
     searchOpen = !searchOpen
@@ -346,10 +379,32 @@
     if (e.key === 'Escape' && searchOpen) { toggleSearch() }
   }
 
+  let typingTimeout = null
+
+  function handleTyping() {
+    uiHidden = true
+    clearTimeout(typingTimeout)
+    typingTimeout = setTimeout(() => {
+      uiHidden = false
+    }, 3000) // Show UI after 3 seconds of inactivity
+  }
+
   onMount(() => {
     load()
     document.addEventListener('keydown', handleKeydown)
-    return () => document.removeEventListener('keydown', handleKeydown)
+    document.addEventListener('keydown', handleTyping)
+    document.addEventListener('mousemove', () => {
+      uiHidden = false
+      clearTimeout(typingTimeout)
+      typingTimeout = setTimeout(() => {
+        uiHidden = true
+      }, 3000)
+    })
+    return () => {
+      document.removeEventListener('keydown', handleKeydown)
+      document.removeEventListener('keydown', handleTyping)
+      document.removeEventListener('mousemove', () => {})
+    }
   })
 </script>
 
@@ -364,94 +419,100 @@
       </div>
     {/if}
 
-    <section><article class="editor-wrap">
-      <Editor onUpdate={handleUpdate} onReady={handleReady} />
-    </article></section>
+     <section><article class="editor-wrap">
+       <Editor onUpdate={handleUpdate} onReady={handleReady} />
+     </article></section>
 
-    <div class="icons-top">
-      <button class="icon-btn" onclick={toggleSearch} title="Search (⌘F)">
-        <i class="fa-solid fa-magnifying-glass"></i>
-      </button>
-      <button class="icon-btn" onclick={toggleVoice} title={listening ? 'Stop listening' : 'Voice input'}>
-        <i class="fa-solid fa-microphone" class:fa-beat-fade={listening} style={listening ? 'color:var(--accent)' : ''}></i>
-      </button>
-      <button class="icon-btn" onclick={organize} disabled={organizing} title="Organize with AI (⌘⌥O)">
-        <i class="fa-solid fa-folder-tree"></i>
-      </button>
-      <button class="icon-btn" onclick={() => settingsOpen = true} title="Settings">
-        <i class="fa-solid fa-gear"></i>
-      </button>
-      <button class="icon-btn" onclick={cycleTheme} title="Theme (⌘⌥E)">
-        <i class="fa-solid fa-circle-half-stroke"></i>
-      </button>
-      <button class="icon-btn" onclick={cycleFont} title="Font (⌘⌥A)">
-        <i class="fa-solid fa-font"></i>
-      </button>
-      <button class="icon-btn" onclick={downloadText} title="Download (⌘S)">
-        <i class="fa-solid fa-download"></i>
-      </button>
-      <button class="icon-btn" onclick={printText} title="Print (⌘P)">
-        <i class="fa-solid fa-print"></i>
-      </button>
-      <button class="icon-btn" onclick={toggleFullscreen} title="Fullscreen (⌘⌥F)">
-        <i class="fa-solid fa-expand"></i>
-      </button>
-    </div>
+     {#if !uiHidden}
+     <div class="icons-top">
+       <button class="icon-btn" onclick={toggleSearch} title="Search (⌘F)">
+         <i class="fa-solid fa-magnifying-glass"></i>
+       </button>
+       <button class="icon-btn" onclick={toggleVoice} title={listening ? 'Stop listening' : 'Voice input'}>
+         <i class="fa-solid fa-microphone" class:fa-beat-fade={listening} style={listening ? 'color:var(--accent)' : ''}></i>
+       </button>
+       <button class="icon-btn" onclick={organize} disabled={organizing} title="Organize with AI (⌘⌥O)">
+         <i class="fa-solid fa-folder-tree"></i>
+       </button>
+       <button class="icon-btn" onclick={() => settingsOpen = true} title="Settings">
+         <i class="fa-solid fa-gear"></i>
+       </button>
+       <button class="icon-btn" onclick={cycleTheme} title="Theme (⌘⌥E)">
+         <i class="fa-solid fa-circle-half-stroke"></i>
+       </button>
+       <button class="icon-btn" onclick={cycleFont} title="Font (⌘⌥A)">
+         <i class="fa-solid fa-font"></i>
+       </button>
+       <button class="icon-btn" onclick={downloadText} title="Download (⌘S)">
+         <i class="fa-solid fa-download"></i>
+       </button>
+       <button class="icon-btn" onclick={printText} title="Print (⌘P)">
+         <i class="fa-solid fa-print"></i>
+       </button>
+       <button class="icon-btn" onclick={toggleFullscreen} title="Fullscreen (⌘⌥F)">
+         <i class="fa-solid fa-expand"></i>
+       </button>
+     </div>
+     {/if}
 
-    {#if searchOpen}
-      <div class="search-bar">
-        <input
-          type="text"
-          bind:value={searchQuery}
-          bind:this={searchInputEl}
-          oninput={doSearch}
-          onkeydown={(e) => { if (e.key === 'Enter') { e.shiftKey ? prevMatch() : nextMatch() } }}
-          placeholder="Search..."
-        />
-        {#if searchMatches.length > 0}
-          <span class="search-count">{searchIndex + 1}/{searchMatches.length}</span>
-        {:else if searchQuery}
-          <span class="search-count no-matches">No matches</span>
-        {/if}
-        <button class="search-nav" onclick={prevMatch} disabled={searchMatches.length === 0} title="Previous (Shift+Enter)">
-          <i class="fa-solid fa-chevron-up"></i>
-        </button>
-        <button class="search-nav" onclick={nextMatch} disabled={searchMatches.length === 0} title="Next (Enter)">
-          <i class="fa-solid fa-chevron-down"></i>
-        </button>
-        <button class="search-close" onclick={toggleSearch}>✕</button>
-      </div>
-    {/if}
+     {#if !uiHidden && searchOpen}
+     <div class="search-bar">
+       <input
+         type="text"
+         bind:value={searchQuery}
+         bind:this={searchInputEl}
+         oninput={doSearch}
+         onkeydown={(e) => { if (e.key === 'Enter') { e.shiftKey ? prevMatch() : nextMatch() } }}
+         placeholder="Search..."
+       />
+       {#if searchMatches.length > 0}
+         <span class="search-count">{searchIndex + 1}/{searchMatches.length}</span>
+       {:else if searchQuery}
+         <span class="search-count no-matches">No matches</span>
+       {/if}
+       <button class="search-nav" onclick={prevMatch} disabled={searchMatches.length === 0} title="Previous (Shift+Enter)">
+         <i class="fa-solid fa-chevron-up"></i>
+       </button>
+       <button class="search-nav" onclick={nextMatch} disabled={searchMatches.length === 0} title="Next (Enter)">
+         <i class="fa-solid fa-chevron-down"></i>
+       </button>
+       <button class="search-close" onclick={toggleSearch}>✕</button>
+     </div>
+     {/if}
 
-    {#if listening}
-      <div class="voice-indicator">
-        <i class="fa-solid fa-microphone" class:fa-beat-fade={true} style="color:var(--accent)"></i>
-        {#if interimText}
-          <span class="voice-interim">{interimText}</span>
-        {:else}
-          <span class="voice-hint">Listening...</span>
-        {/if}
-      </div>
-    {/if}
+     {#if !uiHidden && listening}
+     <div class="voice-indicator">
+       <i class="fa-solid fa-microphone" class:fa-beat-fade={true} style="color:var(--accent)"></i>
+       {#if interimText}
+         <span class="voice-interim">{interimText}</span>
+       {:else}
+         <span class="voice-hint">Listening...</span>
+       {/if}
+     </div>
+     {/if}
 
-    <div class="word-count">{charCount} / {wordCount}</div>
+     {#if !uiHidden}
+     <div class="word-count">{charCount} / {wordCount}</div>
+     {/if}
 
-    <div class="icons-bottom-right">
-      <button class="icon-btn" onclick={() => helpOpen = true} title="Help">
-        <i class="fa-regular fa-circle-question"></i>
-      </button>
-      <button class="icon-btn" onclick={() => aboutOpen = true} title="About">
-        <i class="fa-solid fa-circle-info"></i>
-      </button>
-    </div>
+     <div class="icons-bottom-right">
+       {#if !uiHidden}
+         <button class="icon-btn" onclick={() => helpOpen = true} title="Help">
+           <i class="fa-regular fa-circle-question"></i>
+         </button>
+         <button class="icon-btn" onclick={() => aboutOpen = true} title="About">
+           <i class="fa-solid fa-circle-info"></i>
+         </button>
+       {/if}
+     </div>
 
-    {#if headingElements.length > 0}
-      <Sidebar {headings} onNavigate={handleNavigate} />
-    {/if}
+     {#if !uiHidden && headingElements.length > 0}
+       <Sidebar {headings} onNavigate={handleNavigate} />
+     {/if}
 
-    <SettingsModal open={settingsOpen} onclose={() => settingsOpen = false} />
-    <HelpModal open={helpOpen} onclose={() => helpOpen = false} />
-    <AboutModal open={aboutOpen} onclose={() => aboutOpen = false} />
+     <SettingsModal open={settingsOpen} onclose={() => settingsOpen = false} />
+     <HelpModal open={helpOpen} onclose={() => helpOpen = false} />
+     <AboutModal open={aboutOpen} onclose={() => aboutOpen = false} />
   </div>
 {/if}
 
@@ -482,74 +543,35 @@
   }
   .dismiss { background: none; border: none; cursor: pointer; color: inherit; font-size: 1em; padding: 2px; }
 
-  .icon-btn {
+.icon-btn {
     display: flex; align-items: center; justify-content: center;
     width: 32px; height: 32px; padding: 0;
     border: none; background: none; cursor: pointer;
-    color: var(--muted); transition: color 0.15s;
+    color: var(--muted); transition: color 0.15s, opacity 0.3s;
     font-size: 16px;
-  }
-  .icon-btn:hover { color: var(--fg); }
-  .icon-btn:disabled { opacity: 0.25; cursor: default; }
+}
+.icon-btn:hover { color: var(--fg); }
+.icon-btn:disabled { opacity: 0.25; cursor: default; }
 
-  .icons-top {
-    position: fixed; top: 12px; right: 12px;
-    display: flex; flex-direction: column; gap: 2px; z-index: 50;
-  }
-  .icons-bottom-right {
-    position: fixed; bottom: 12px; right: 12px;
-    display: flex; flex-direction: column; gap: 2px; z-index: 50;
-  }
-  .word-count {
-    position: fixed; bottom: 16px; left: 20px;
-    font-size: 0.75em; color: var(--muted);
-    font-family: 'Roboto Mono', monospace;
-    opacity: 0.4; transition: opacity 0.15s; z-index: 50;
-  }
-  .word-count:hover { opacity: 0.8; }
+.icons-top,
+.icons-bottom-right,
+.search-bar,
+.voice-indicator,
+.word-count,
+.Sidebar { 
+    transition: opacity 0.3s ease, transform 0.3s ease; 
+    opacity: 1;
+    transform: translateY(0);
+}
 
-  .voice-indicator {
-    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
-    display: flex; align-items: center; gap: 8px;
-    padding: 8px 16px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    font-size: 0.8em; color: var(--fg);
-    z-index: 100;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-    max-width: 400px;
-  }
-  .voice-interim {
-    opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .voice-hint { opacity: 0.5; }
-
-  .search-bar {
-    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
-    display: flex; align-items: center; gap: 6px;
-    padding: 6px 10px; background: var(--surface);
-    border: 1px solid var(--border); border-radius: 8px;
-    z-index: 100; box-shadow: 0 4px 20px rgba(0,0,0,0.12);
-    font-family: 'Roboto Mono', monospace;
-  }
-  .search-bar input {
-    padding: 4px 8px; border: none; background: none;
-    font-size: 0.85em; color: var(--fg); outline: none;
-    width: 180px; font-family: inherit;
-  }
-  .search-count {
-    font-size: 0.75em; color: var(--muted); white-space: nowrap;
-    min-width: 40px; text-align: center;
-  }
-  .search-count.no-matches { color: var(--error-color); }
-  .search-nav, .search-close {
-    display: flex; align-items: center; justify-content: center;
-    width: 24px; height: 24px; padding: 0;
-    border: none; background: none; cursor: pointer;
-    color: var(--muted); font-size: 12px;
-  }
-  .search-nav:hover, .search-close:hover { color: var(--fg); }
-  .search-nav:disabled { opacity: 0.25; cursor: default; }
-  @media (max-width: 768px) { .app-shell { padding: 30px 20px; } }
+.ui-hidden .icons-top,
+.ui-hidden .icons-bottom-right,
+.ui-hidden .search-bar,
+.ui-hidden .voice-indicator,
+.ui-hidden .word-count,
+.ui-hidden .Sidebar {
+    opacity: 0;
+    transform: translateY(-10px);
+    pointer-events: none;
+}
 </style>

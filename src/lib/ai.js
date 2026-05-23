@@ -25,21 +25,41 @@ Response format:
 }`
 
 export function extractJsonFromResponse(text) {
+  // Try to find JSON in the response
   let cleaned = text.trim()
+  
+  // First, try to extract JSON from markdown code blocks
   const jsonMatch = cleaned.match(/```(?:json)?\s*\n?([\s\S]*?)```/)
   if (jsonMatch) {
     cleaned = jsonMatch[1].trim()
   }
+  
+  // Try to parse the cleaned text as JSON
   try {
     return JSON.parse(cleaned)
-  } catch {
+  } catch (e) {
+    // If that fails, try to find JSON object boundaries
     const braceStart = cleaned.indexOf('{')
     const braceEnd = cleaned.lastIndexOf('}')
-    if (braceStart !== -1 && braceEnd !== -1) {
+    
+    if (braceStart !== -1 && braceEnd !== -1 && braceEnd > braceStart) {
+      const jsonText = cleaned.slice(braceStart, braceEnd + 1)
       try {
-        return JSON.parse(cleaned.slice(braceStart, braceEnd + 1))
-      } catch {}
+        return JSON.parse(jsonText)
+      } catch (e2) {
+        // If still failing, try to find the longest valid JSON substring
+        // by removing characters from the ends
+        for (let i = 0; i < jsonText.length; i++) {
+          for (let j = jsonText.length; j > i; j--) {
+            const substring = jsonText.substring(i, j)
+            try {
+              return JSON.parse(substring)
+            } catch {}
+          }
+        }
+      }
     }
+    
     throw new Error('AI returned invalid JSON')
   }
 }
