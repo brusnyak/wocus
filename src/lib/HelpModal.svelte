@@ -27,17 +27,17 @@
         <section>
           <h3>AI & Views</h3>
           <div class="grid">
-            <span>Organize with AI</span><span><code>Ctrl/Cmd + Shift + O</code></span>
-            <span>Toggle Draft / Structured</span><span><code>Ctrl/Cmd + Shift + V</code></span>
+            <span>Organize with AI</span><span><code>Ctrl/Cmd + ⌥ + O</code></span>
+            <span>Toggle Draft / Structured</span><span><code>Ctrl/Cmd + ⌥ + V</code></span>
             <span>Voice input</span><span>Click <i class="fa-solid fa-microphone"></i> or system dictation</span>
           </div>
         </section>
         <section>
           <h3>Appearance</h3>
           <div class="grid">
-            <span>Cycle theme</span><span><code>Ctrl/Cmd + Shift + E</code></span>
-            <span>Cycle font</span><span><code>Ctrl/Cmd + Shift + A</code></span>
-            <span>Fullscreen</span><span><code>Ctrl/Cmd + Shift + F</code></span>
+            <span>Cycle theme</span><span><code>Ctrl/Cmd + ⌥ + E</code></span>
+            <span>Cycle font</span><span><code>Ctrl/Cmd + ⌥ + A</code></span>
+            <span>Fullscreen</span><span><code>Ctrl/Cmd + ⌥ + F</code></span>
           </div>
         </section>
         <section>

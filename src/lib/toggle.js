@@ -6,7 +6,10 @@ export const DetailsSummary = Node.create({
   content: 'inline*',
   parseHTML() { return [{ tag: 'summary' }] },
   renderHTML({ HTMLAttributes }) {
-    return ['summary', HTMLAttributes, 0]
+    return ['summary', { 'data-summary': '' },
+      ['span', { 'data-toggle-arrow': '', contenteditable: 'false', class: 'toggle-arrow' }, '▸'],
+      0
+    ]
   },
   addAttributes() {
     return { class: { default: null } }

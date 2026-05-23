@@ -43,7 +43,8 @@
   let font = $derived(FONTS[fontIndex])
 
   let saveTimer
-  let organizePromptResolve = null
+  let organizerPrompt = $state({ show: false, text: '' })
+  let alwaysOrganize = $state(false)
 
   $effect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -94,7 +95,7 @@
     queueSave()
   }
 
-  function blocksToTipTapNode(b) {
+  function blockToTipTapNode(b) {
     const text = (b.content || '').toString()
     switch (b.type) {
       case 'heading':
@@ -230,7 +231,40 @@
   }
 
   function switchMode(mode) {
+    if (mode === 'organized' && note?.content) {
+      const text = textFromJson(note.content)
+      if (text && !hasStructure(note.content)) {
+        if (s.autoOrganize) {
+          organize()
+          viewMode = 'organized'
+          return
+        }
+        organizerPrompt = { show: true, text }
+        return
+      }
+    }
     viewMode = mode
+  }
+
+  function handleOrganizeConfirm() {
+    const txt = organizerPrompt.text
+    organizerPrompt = { show: false, text: '' }
+    if (alwaysOrganize) {
+      s.autoOrganize = true
+      s.save()
+      alwaysOrganize = false
+    }
+    organize()
+  }
+
+  function handleOrganizeSkip() {
+    if (alwaysOrganize) {
+      s.autoOrganize = true
+      s.save()
+      alwaysOrganize = false
+    }
+    organizerPrompt = { show: false, text: '' }
+    viewMode = 'organized'
   }
 
   function handleNavigate(index) {
@@ -356,14 +390,13 @@
 
   function handleKeydown(e) {
     const mod = e.metaKey || e.ctrlKey
-    if (e.key === '?' && !mod) { e.preventDefault(); helpOpen = true; return }
-    if (mod && e.shiftKey) {
+    if (mod && e.altKey) {
       switch (e.key) {
-        case 'O': e.preventDefault(); organize(); break
-        case 'V': e.preventDefault(); switchMode(viewMode === 'raw' ? 'organized' : 'raw'); break
-        case 'E': e.preventDefault(); cycleTheme(); break
-        case 'A': e.preventDefault(); cycleFont(); break
-        case 'F': e.preventDefault(); toggleFullscreen(); break
+        case 'o': e.preventDefault(); organize(); break
+        case 'v': e.preventDefault(); switchMode(viewMode === 'raw' ? 'organized' : 'raw'); break
+        case 'e': e.preventDefault(); cycleTheme(); break
+        case 'a': e.preventDefault(); cycleFont(); break
+        case 'f': e.preventDefault(); toggleFullscreen(); break
       }
     }
     if (mod && e.key === 's') { e.preventDefault(); downloadText() }
@@ -408,10 +441,10 @@
       <button class="icon-btn" onclick={toggleVoice} title={listening ? 'Stop listening' : 'Voice input'}>
         <i class="fa-solid fa-microphone" class:fa-beat-fade={listening} style={listening ? 'color:var(--accent)' : ''}></i>
       </button>
-      <button class="icon-btn" onclick={organize} disabled={organizing} title="Organize with AI (⌘⇧O)">
+      <button class="icon-btn" onclick={organize} disabled={organizing} title="Organize with AI (⌘⌥O)">
         <i class="fa-solid fa-folder-tree"></i>
       </button>
-      <button class="icon-btn" onclick={() => switchMode(viewMode === 'raw' ? 'organized' : 'raw')} title="Toggle view (⌘⇧V)">
+      <button class="icon-btn" onclick={() => switchMode(viewMode === 'raw' ? 'organized' : 'raw')} title="Toggle view (⌘⌥V)">
         {#if viewMode === 'raw'}
           <i class="fa-solid fa-toggle-off"></i>
         {:else}
@@ -421,10 +454,10 @@
       <button class="icon-btn" onclick={() => settingsOpen = true} title="Settings">
         <i class="fa-solid fa-gear"></i>
       </button>
-      <button class="icon-btn" onclick={cycleTheme} title="Theme (⌘⇧E)">
+      <button class="icon-btn" onclick={cycleTheme} title="Theme (⌘⌥E)">
         <i class="fa-solid fa-circle-half-stroke"></i>
       </button>
-      <button class="icon-btn" onclick={cycleFont} title="Font (⌘⇧A)">
+      <button class="icon-btn" onclick={cycleFont} title="Font (⌘⌥A)">
         <i class="fa-solid fa-font"></i>
       </button>
       <button class="icon-btn" onclick={downloadText} title="Download (⌘S)">
@@ -490,6 +523,25 @@
     {/if}
 
     <SettingsModal open={settingsOpen} onclose={() => settingsOpen = false} />
+
+    {#if organizerPrompt.show}
+      <div class="overlay" onclick={() => organizerPrompt = { show: false, text: '' }} onkeydown={(e) => e.key === 'Escape' && (organizerPrompt = { show: false, text: '' })} role="dialog" tabindex="-1">
+        <div class="organizer-modal" onclick={(e) => e.stopPropagation()}>
+          <div class="organizer-body">
+            <p>This content has no structure yet. Organize it with AI?</p>
+            <label class="always-check">
+              <input type="checkbox" bind:checked={alwaysOrganize} />
+              <span>Always organize — don't ask again</span>
+            </label>
+          </div>
+          <div class="organizer-actions">
+            <button class="btn secondary" onclick={handleOrganizeSkip}>Skip</button>
+            <button class="btn primary" onclick={handleOrganizeConfirm}>Organize</button>
+          </div>
+        </div>
+      </div>
+    {/if}
+
     <HelpModal open={helpOpen} onclose={() => helpOpen = false} />
     <AboutModal open={aboutOpen} onclose={() => aboutOpen = false} />
   </div>
@@ -601,5 +653,40 @@
   }
   .search-nav:hover, .search-close:hover { color: var(--fg); }
   .search-nav:disabled { opacity: 0.25; cursor: default; }
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 200;
+  }
+  .organizer-modal {
+    background: var(--surface); border-radius: 12px;
+    width: 400px; max-width: 90vw;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.15);
+  }
+  .organizer-body { padding: 24px 24px 16px; }
+  .organizer-body p { margin: 0 0 12px; font-size: 0.9em; line-height: 1.5; }
+  .always-check {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.8em; color: var(--muted); cursor: pointer;
+  }
+  .always-check input { cursor: pointer; }
+  .organizer-actions {
+    display: flex; justify-content: flex-end; gap: 8px;
+    padding: 12px 24px 20px;
+  }
+  .btn {
+    padding: 8px 20px; border-radius: 8px; border: 1px solid var(--border);
+    font-size: 0.85em; font-family: inherit; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn.primary {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+  }
+  .btn.primary:hover { opacity: 0.9; }
+  .btn.secondary {
+    background: none; color: var(--fg);
+  }
+  .btn.secondary:hover { background: var(--hover); }
+
   @media (max-width: 768px) { .app-shell { padding: 30px 20px; } }
 </style>

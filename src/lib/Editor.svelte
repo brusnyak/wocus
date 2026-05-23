@@ -34,33 +34,37 @@
       editorProps: {
         handleDOMEvents: {
           mousedown: (view, event) => {
-            const summary = event.target.closest('summary')
-            if (summary) {
+            const arrow = event.target.closest('[data-toggle-arrow]')
+            if (arrow) {
               event.preventDefault()
               return true
             }
             return false
           },
           click: (view, event) => {
-            const summary = event.target.closest('summary')
-            if (summary) {
+            const arrow = event.target.closest('[data-toggle-arrow]')
+            if (arrow) {
               event.preventDefault()
-              const { posAtDOM } = view
-              const details = summary.closest('details')
-              if (details && posAtDOM) {
-                const pos = posAtDOM(details, 0)
+              const details = arrow.closest('details')
+              if (details) {
+                const pos = view.posAtDOM(details, 0)
                 if (pos !== null) {
                   const resolved = view.state.doc.resolve(pos)
                   if (resolved.depth >= 1) {
                     const togglePos = resolved.before(1)
                     const node = view.state.doc.nodeAt(togglePos)
                     if (node && node.type.name === 'details') {
-                      const tr = view.state.tr.setNodeMarkup(togglePos, null, { open: !node.attrs.open })
+                      const tr = view.state.tr.setNodeMarkup(togglePos, null, { ...node.attrs, open: !node.attrs.open })
                       view.dispatch(tr)
                     }
                   }
                 }
               }
+              return true
+            }
+            const summary = event.target.closest('summary')
+            if (summary) {
+              event.preventDefault()
               return true
             }
             return false
@@ -121,12 +125,18 @@
   .editor :global(.ProseMirror ul[data-type="taskList"] li input[type="checkbox"]) { margin: 0; width: 14px; height: 14px; cursor: pointer; }
   .editor :global(.ProseMirror ul[data-type="taskList"] li p) { margin: 0; }
   .editor :global(.ProseMirror details) { margin: 0.5em 0; }
-  .editor :global(.ProseMirror details summary) { cursor: default; font-weight: 600; }
-  .editor :global(.ProseMirror details > div) { padding-left: 1em; }
-
-  /* Hide native marker, toggle via data-toggle icon */
+  .editor :global(.ProseMirror details summary) { cursor: default; font-weight: 600; list-style: none; }
   .editor :global(.ProseMirror details summary)::marker,
   .editor :global(.ProseMirror details summary)::-webkit-details-marker { display: none; content: ''; }
+  .editor :global(.ProseMirror details > div) { padding-left: 1em; }
+  .editor :global(.toggle-arrow) {
+    display: inline-block; cursor: pointer; user-select: none;
+    width: 1em; text-align: center; font-size: 0.7em;
+    transition: transform 0.15s; color: var(--muted);
+    vertical-align: middle; margin-right: 2px;
+  }
+  .editor :global(details[open] > summary .toggle-arrow) { transform: rotate(90deg); }
+  .editor :global(.toggle-arrow:hover) { color: var(--fg); }
 
   /* Raw mode flattening */
   .editor.raw-mode :global(.ProseMirror h1),
@@ -139,6 +149,7 @@
   .editor.raw-mode :global(.ProseMirror details summary) { cursor: default; font-weight: normal; }
   .editor.raw-mode :global(.ProseMirror details summary)::marker,
   .editor.raw-mode :global(.ProseMirror details summary)::-webkit-details-marker { display: none; content: ''; }
+  .editor.raw-mode :global(.toggle-arrow) { display: none; }
   .editor.raw-mode :global(.ProseMirror ul[data-type="taskList"] li input[type="checkbox"]) { display: none; }
 
   :global(.slash-item) {

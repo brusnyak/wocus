@@ -6,7 +6,8 @@ const SETTINGS_KEYS = {
   apiKey: 'apiKey',
   modelName: 'modelName',
   darkMode: 'darkMode',
-  aiEnabled: 'aiEnabled'
+  aiEnabled: 'aiEnabled',
+  autoOrganize: 'autoOrganize'
 }
 
 export const PROVIDERS = {
@@ -38,7 +39,8 @@ const defaults = {
   apiKey: '',
   modelName: 'openrouter/auto',
   darkMode: false,
-  aiEnabled: true
+  aiEnabled: true,
+  autoOrganize: false
 }
 
 let loaded = $state(false)
@@ -48,6 +50,7 @@ let apiKey = $state('')
 let modelName = $state(defaults.modelName)
 let darkMode = $state(false)
 let aiEnabled = $state(true)
+let autoOrganize = $state(false)
 
 export function getSettings() {
   return {
@@ -64,6 +67,8 @@ export function getSettings() {
     set darkMode(v) { darkMode = v },
     get aiEnabled() { return aiEnabled },
     set aiEnabled(v) { aiEnabled = v },
+    get autoOrganize() { return autoOrganize },
+    set autoOrganize(v) { autoOrganize = v },
     isOllama() {
       return provider === 'ollama' || apiEndpoint.includes('localhost') || apiEndpoint.includes('0.0.0.0')
     },
@@ -80,6 +85,7 @@ export function getSettings() {
       modelName = await getSetting(SETTINGS_KEYS.modelName) || defaults.modelName
       darkMode = await getSetting(SETTINGS_KEYS.darkMode) ?? false
       aiEnabled = await getSetting(SETTINGS_KEYS.aiEnabled) ?? true
+      autoOrganize = await getSetting(SETTINGS_KEYS.autoOrganize) ?? false
       // auto-detect provider from endpoint if not explicitly set
       if (!await getSetting(SETTINGS_KEYS.provider)) {
         provider = this.resolveProviderFromEndpoint()
@@ -93,6 +99,7 @@ export function getSettings() {
       await setSetting(SETTINGS_KEYS.modelName, modelName)
       await setSetting(SETTINGS_KEYS.darkMode, darkMode)
       await setSetting(SETTINGS_KEYS.aiEnabled, aiEnabled)
+      await setSetting(SETTINGS_KEYS.autoOrganize, autoOrganize)
     },
     hasApiKey() {
       return apiKey && apiKey.length > 0
