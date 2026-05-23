@@ -40,7 +40,9 @@ let wordCount = $state(0)
 let uiHidden = $state(false)
 let lastActivity = $state(Date.now())
 
-$: document.documentElement.classList.toggle('ui-hidden', uiHidden)
+  $effect(() => {
+    document.documentElement.classList.toggle('ui-hidden', uiHidden)
+  })
 
 let theme = $derived(THEMES[themeIndex])
 let font = $derived(FONTS[fontIndex])
@@ -557,8 +559,7 @@ let font = $derived(FONTS[fontIndex])
 .icons-bottom-right,
 .search-bar,
 .voice-indicator,
-.word-count,
-.Sidebar { 
+.word-count { 
     transition: opacity 0.3s ease, transform 0.3s ease; 
     opacity: 1;
     transform: translateY(0);
@@ -568,8 +569,7 @@ let font = $derived(FONTS[fontIndex])
 .ui-hidden .icons-bottom-right,
 .ui-hidden .search-bar,
 .ui-hidden .voice-indicator,
-.ui-hidden .word-count,
-.ui-hidden .Sidebar {
+.ui-hidden .word-count {
     opacity: 0;
     transform: translateY(-10px);
     pointer-events: none;
