@@ -26,6 +26,7 @@
   let searchQuery = $state('')
   let searchMatches = $state([])
   let searchIndex = $state(0)
+  let searchInputEl
 
   const FONTS = ['monospace', 'serif', 'sans-serif']
   let fontIndex = $state(0)
@@ -265,6 +266,7 @@
   function toggleSearch() {
     searchOpen = !searchOpen
     if (!searchOpen) { searchQuery = ''; searchMatches = []; searchIndex = 0 }
+    else requestAnimationFrame(() => searchInputEl?.focus())
   }
 
   function cycleTheme() {
@@ -384,10 +386,10 @@
         <input
           type="text"
           bind:value={searchQuery}
+          bind:this={searchInputEl}
           oninput={doSearch}
           onkeydown={(e) => { if (e.key === 'Enter') { e.shiftKey ? prevMatch() : nextMatch() } }}
           placeholder="Search..."
-          autofocus
         />
         {#if searchMatches.length > 0}
           <span class="search-count">{searchIndex + 1}/{searchMatches.length}</span>

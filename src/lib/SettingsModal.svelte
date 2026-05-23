@@ -123,7 +123,7 @@
           {#if currentModels.length > 0}
             <datalist id="model-suggestions">
               {#each currentModels as m}
-                <option value={m} />
+                <option value={m}></option>
               {/each}
             </datalist>
           {/if}
@@ -220,9 +220,6 @@
   .field input.auto-filled {
     font-family: 'Roboto Mono', monospace;
     font-size: 0.8em;
-  }
-  .field input.model-custom {
-    margin-top: 4px;
   }
   .test-btn {
     padding: 8px 14px;
