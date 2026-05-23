@@ -13,7 +13,7 @@ export const PROVIDERS = {
   openrouter: {
     label: 'OpenRouter',
     endpoint: 'https://openrouter.ai/api/v1/chat/completions',
-    models: ['mistralai/mistral-7b-instruct', 'openai/gpt-4o', 'openai/gpt-4o-mini', 'openai/gpt-4o', 'anthropic/claude-sonnet-20241022', 'anthropic/claude-3.5-sonnet', 'google/gemini-pro', 'deepseek/deepseek-v3-base']
+    models: ['openrouter/auto', 'mistralai/mistral-7b-instruct:free', 'openai/gpt-4o', 'openai/gpt-4o-mini', 'meta-llama/llama-3.2-3b-instruct:free', 'google/gemini-2.0-flash-exp:free', 'anthropic/claude-sonnet-20241022', 'deepseek/deepseek-v3-base:free']
   },
   openai: {
     label: 'OpenAI',
@@ -36,7 +36,7 @@ const defaults = {
   provider: 'openrouter',
   apiEndpoint: PROVIDERS.openrouter.endpoint,
   apiKey: '',
-  modelName: PROVIDERS.openrouter.models[0],
+  modelName: 'openrouter/auto',
   darkMode: false,
   aiEnabled: true
 }
