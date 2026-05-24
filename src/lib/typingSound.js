@@ -1,6 +1,11 @@
+// Typewriter sound by juskiddink (freesound.org/people/juskiddink/sounds/75105)
+// Licensed under Creative Commons Attribution 4.0
+
 import { getSettings } from './settings.svelte.js'
 
 let ctx = null
+let buffer = null
+let loading = null
 
 function getContext() {
   if (!ctx) {
@@ -12,49 +17,46 @@ function getContext() {
   return ctx
 }
 
+async function loadBuffer() {
+  if (buffer) return buffer
+  if (loading) return loading
+  loading = (async () => {
+    const ac = getContext()
+    const res = await fetch('/sounds/typewriter.mp3')
+    const arrayBuffer = await res.arrayBuffer()
+    buffer = await ac.decodeAudioData(arrayBuffer)
+    return buffer
+  })()
+  return loading
+}
+
 export function playKeySound(type = 'letter') {
   if (!getSettings().typingSound) return
+  const ac = getContext()
+  if (!buffer) {
+    loadBuffer()
+    return
+  }
+
   try {
-    const ac = getContext()
-    const now = ac.currentTime
+    const len = buffer.duration
+    const dur = type === 'enter' ? 0.14 : type === 'space' ? 0.1 : 0.07
+    const maxStart = Math.max(0, len - dur)
 
-    const duration = type === 'enter' ? 0.07 : 0.035
-    const baseFreq = type === 'enter' ? 180 : type === 'space' ? 280 : 350
-    const pitchVar = 1 + (Math.random() - 0.5) * 0.3
-    const freq = baseFreq * pitchVar
-    const volVar = 0.75 + Math.random() * 0.5
-    const volume = (type === 'enter' ? 0.07 : 0.04) * volVar
+    const start = Math.random() * maxStart
+    const rate = 0.9 + Math.random() * 0.2
+    const vol = type === 'enter' ? 0.9 : type === 'space' ? 0.7 : 0.6
 
-    const osc = ac.createOscillator()
-    osc.type = 'sine'
-    osc.frequency.value = freq
+    const source = ac.createBufferSource()
+    source.buffer = buffer
+    source.playbackRate.value = rate
 
-    const oscGain = ac.createGain()
-    oscGain.gain.setValueAtTime(volume, now)
-    oscGain.gain.exponentialRampToValueAtTime(0.001, now + duration)
+    const gain = ac.createGain()
+    gain.gain.setValueAtTime(vol, ac.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur / rate)
 
-    osc.connect(oscGain)
-    oscGain.connect(ac.destination)
-    osc.start(now)
-    osc.stop(now + duration)
-
-    const noiseLen = Math.floor(ac.sampleRate * 0.015)
-    if (noiseLen > 0) {
-      const buffer = ac.createBuffer(1, noiseLen, ac.sampleRate)
-      const data = buffer.getChannelData(0)
-      for (let i = 0; i < noiseLen; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / noiseLen, 2)
-      }
-      const noise = ac.createBufferSource()
-      noise.buffer = buffer
-
-      const noiseGain = ac.createGain()
-      noiseGain.gain.setValueAtTime(volume * 0.5, now)
-      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.015)
-
-      noise.connect(noiseGain)
-      noiseGain.connect(ac.destination)
-      noise.start(now)
-    }
+    source.connect(gain)
+    gain.connect(ac.destination)
+    source.start(0, start, dur / rate)
   } catch {}
 }
