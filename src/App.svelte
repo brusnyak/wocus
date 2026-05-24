@@ -102,25 +102,32 @@ let font = $derived(FONTS[fontIndex])
 
   async function toggleMarkdownView() {
     if (markdownView) {
-      const { marked } = await import('marked')
-      const html = await marked.parse(markdownSource)
-      note.html = html
-      const div = document.createElement('div')
-      div.innerHTML = html
-      note.text = div.textContent || ''
-      note.content = ''
-      updateCounts(note.text)
-      queueSave()
-      if (editorApi) {
-        try { editorApi.setContent(html) } catch (e) { editorApi.setContent(note.html) }
-      }
       markdownView = false
     } else {
       const TurndownService = (await import('turndown')).default
       const turndown = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced' })
-      markdownSource = turndown.turndown(note?.html || '')
+      const md = turndown.turndown(note?.html || '')
+      const { marked } = await import('marked')
+      markdownSource = await marked.parse(md)
       markdownView = true
     }
+  }
+
+  function handleApplySuggestion(text) {
+    if (!editorApi) return
+    const { view } = editorApi.getEditor()
+    const { state, dispatch } = view
+    const tr = state.tr.insertText('\n' + text, state.selection.to)
+    dispatch(tr)
+    view.focus()
+    const html = editorApi.getHTML()
+    const json = editorApi.getJSON()
+    const plainText = editorApi.getText()
+    note.html = html
+    note.content = JSON.stringify(json)
+    note.text = plainText
+    updateCounts(plainText)
+    queueSave()
   }
 
   function blocksToTipTapNode(b) {
@@ -536,7 +543,7 @@ let font = $derived(FONTS[fontIndex])
           <Editor onUpdate={handleUpdate} onReady={handleReady} />
         </div>
         <div class:markdown-visible={markdownView}>
-          <textarea class="markdown-source" bind:value={markdownSource} oninput={() => { updateCounts(markdownSource); queueSave() }}></textarea>
+          <div class="markdown-preview">{@html markdownSource}</div>
         </div>
       </article></section>
 
@@ -656,6 +663,7 @@ let font = $derived(FONTS[fontIndex])
         modelName={s.modelName}
         noteText={note?.text || ''}
         onOrganize={organize}
+        onApply={handleApplySuggestion}
         onError={(msg) => error = msg}
       />
   </div>
@@ -809,21 +817,31 @@ let font = $derived(FONTS[fontIndex])
 
 .editor-hidden { display: none; }
 
-.markdown-source {
+.markdown-preview {
     width: 100%;
     min-height: 70vh;
     padding: 1rem;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--code-bg);
+    background: var(--bg);
     color: var(--fg);
-    font-family: 'Roboto Mono', monospace;
-    font-size: 0.9em;
-    line-height: 1.6;
-    resize: vertical;
+    font-size: 1em;
+    line-height: 1.8;
     outline: none;
 }
-.markdown-source:focus { border-color: var(--accent); }
+:global(.markdown-preview) h1 { font-size: 2em; font-weight: 700; margin: 1.2em 0 0.5em; }
+:global(.markdown-preview) h2 { font-size: 1.5em; font-weight: 600; margin: 1em 0 0.4em; }
+:global(.markdown-preview) h3 { font-size: 1.2em; font-weight: 600; margin: 0.8em 0 0.3em; }
+:global(.markdown-preview) p { margin: 0.5em 0; }
+:global(.markdown-preview) ul, :global(.markdown-preview) ol { padding-left: 1.5em; }
+:global(.markdown-preview) pre {
+    background: var(--code-bg); border-radius: 4px;
+    padding: 1em; overflow-x: auto; margin: 0.5em 0;
+}
+:global(.markdown-preview) code { font-size: 0.9em; }
+:global(.markdown-preview) blockquote {
+    border-left: 3px solid var(--accent); padding-left: 1em; margin: 0.5em 0; color: var(--muted);
+}
+:global(.markdown-preview) hr { border: none; border-top: 1px solid var(--border); margin: 1.5em 0; }
+:global(.markdown-preview) a { color: var(--accent); text-decoration: underline; }
 
 :global(.ui-hidden) .icons-top,
 :global(.ui-hidden) .icons-bottom-right,

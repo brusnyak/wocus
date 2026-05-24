@@ -6,6 +6,7 @@
     noteText = '',
     hidden = false,
     onOrganize,
+    onApply,
     onError
   } = $props()
 
@@ -54,6 +55,7 @@
         messages = [
           {
             role: 'assistant',
+            id: 'welcome',
             content: `👋 Hi! I'm **Wocus AI**, your note-taking assistant. I can help you with:
 
 ✨ **Answer questions** about your note
@@ -72,6 +74,12 @@ How can I help you today?`
 
   function formatAIResponse(text) {
     return text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+  }
+
+  function extractPlainText(html) {
+    const div = document.createElement('div')
+    div.innerHTML = html
+    return div.textContent || div.innerText || ''
   }
 
   async function send() {
@@ -102,7 +110,7 @@ How can I help you today?`
         res = await fetchAI(text)
       }
       res = formatAIResponse(res)
-      messages = [...messages, { role: 'assistant', content: res }]
+      messages = [...messages, { role: 'assistant', content: res, id: Date.now() }]
     } catch (e) {
       error = e.message || 'Something went wrong'
       onError?.(error)
@@ -234,6 +242,12 @@ Be concise, practical, and maintain a warm, encouraging tone.`
                 {msg.content}
               {/if}
             </div>
+            {#if msg.role === 'assistant' && msg.id !== 'welcome'}
+              <button class="apply-btn" onclick={() => onApply?.(extractPlainText(msg.content))} title="Apply to note">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                Apply to note
+              </button>
+            {/if}
           </div>
         {/each}
 
@@ -427,7 +441,8 @@ Be concise, practical, and maintain a warm, encouraging tone.`
     justify-content: flex-end;
   }
   .msg.assistant {
-    justify-content: flex-start;
+    flex-direction: column;
+    align-items: flex-start;
   }
   .msg.error {
     justify-content: center;
@@ -520,4 +535,25 @@ Be concise, practical, and maintain a warm, encouraging tone.`
     border-color: var(--accent);
   }
   .send:disabled { opacity: 0.35; cursor: default; }
+
+  .apply-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--surface);
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 0.72em;
+    font-family: inherit;
+    transition: background 0.12s;
+  }
+  .apply-btn:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
 </style>
