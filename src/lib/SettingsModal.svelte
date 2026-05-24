@@ -205,6 +205,17 @@
             </label>
           </label>
 
+          <label class="field toggle-field">
+            <span class="toggle-label">
+              <span>Typing Sound</span>
+              <span class="toggle-desc">Mechanical keyboard click as you type (Web Audio, no files needed)</span>
+            </span>
+            <label class="switch">
+              <input type="checkbox" checked={s.typingSound} onchange={(e) => s.typingSound = e.target.checked} />
+              <span class="slider"></span>
+            </label>
+          </label>
+
           <button class="test-btn" onclick={testConnection} disabled={testing}>
             {testing ? 'Testing...' : 'Test Connection'}
           </button>

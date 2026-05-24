@@ -8,7 +8,8 @@ const SETTINGS_KEYS = {
   darkMode: 'darkMode',
   aiEnabled: 'aiEnabled',
   autoOrganize: 'autoOrganize',
-  linkAnalysis: 'linkAnalysis'
+  linkAnalysis: 'linkAnalysis',
+  typingSound: 'typingSound'
 }
 
 export const PROVIDERS = {
@@ -42,7 +43,8 @@ const defaults = {
   darkMode: false,
   aiEnabled: true,
   autoOrganize: false,
-  linkAnalysis: true
+  linkAnalysis: true,
+  typingSound: false
 }
 
 let loaded = $state(false)
@@ -54,6 +56,7 @@ let darkMode = $state(false)
 let aiEnabled = $state(true)
 let autoOrganize = $state(false)
 let linkAnalysis = $state(true)
+let typingSound = $state(false)
 
 export function getSettings() {
   return {
@@ -74,6 +77,8 @@ export function getSettings() {
     set autoOrganize(v) { autoOrganize = v },
     get linkAnalysis() { return linkAnalysis },
     set linkAnalysis(v) { linkAnalysis = v },
+    get typingSound() { return typingSound },
+    set typingSound(v) { typingSound = v },
     isOllama() {
       return provider === 'ollama' || apiEndpoint.includes('localhost') || apiEndpoint.includes('0.0.0.0')
     },
@@ -92,6 +97,7 @@ export function getSettings() {
       aiEnabled = await getSetting(SETTINGS_KEYS.aiEnabled) ?? true
       autoOrganize = await getSetting(SETTINGS_KEYS.autoOrganize) ?? false
       linkAnalysis = await getSetting(SETTINGS_KEYS.linkAnalysis) ?? true
+      typingSound = await getSetting(SETTINGS_KEYS.typingSound) ?? false
       // auto-detect provider from endpoint if not explicitly set
       if (!await getSetting(SETTINGS_KEYS.provider)) {
         provider = this.resolveProviderFromEndpoint()
@@ -107,6 +113,7 @@ export function getSettings() {
       await setSetting(SETTINGS_KEYS.aiEnabled, aiEnabled)
       await setSetting(SETTINGS_KEYS.autoOrganize, autoOrganize)
       await setSetting(SETTINGS_KEYS.linkAnalysis, linkAnalysis)
+      await setSetting(SETTINGS_KEYS.typingSound, typingSound)
     },
     hasApiKey() {
       return apiKey && apiKey.length > 0

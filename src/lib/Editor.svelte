@@ -7,6 +7,7 @@
   import TaskItem from '@tiptap/extension-task-item'
   import { Details, DetailsContent, DetailsSummary } from './toggle.js'
   import SlashCommandExtension from './slash.js'
+  import { playKeySound } from './typingSound.js'
 
   let { onUpdate, onReady } = $props()
 
@@ -33,6 +34,15 @@
       ],
       editorProps: {
         handleDOMEvents: {
+          keydown: (_view, event) => {
+            if (event.repeat) return false
+            if (event.ctrlKey || event.metaKey || event.altKey) return false
+            const key = event.key
+            if (key === 'Enter') playKeySound('enter')
+            else if (key === ' ' || key === 'Spacebar') playKeySound('space')
+            else if (key.length === 1) playKeySound('letter')
+            return false
+          },
           click: (view, event) => {
             const summary = event.target.closest('summary')
             if (summary) {
