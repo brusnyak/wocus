@@ -13,6 +13,10 @@ const LINK_PROMPT = `
 8. For any URLs found in the text, analyze the link context and provide a brief mini-summary of what the linked content is about based on the surrounding text
 9. If a URL appears, replace it with a markdown-style link [description](url) where description is a short contextual summary`
 
+const TAGGING_PROMPT = `
+10. After analyzing the content, suggest 3-5 relevant tags that describe the main topics
+11. Add a "tags" field at the end of the response JSON with an array of tag strings`
+
 const BASE_FORMAT = `
 Response format:
 {
@@ -26,12 +30,14 @@ Response format:
     { "type": "heading", "level": 1, "content": "..." },
     { "type": "todo", "content": "...", "checked": false },
     { "type": "divider" }
-  ]
+  ],
+  "tags": ["tag1", "tag2", "tag3"]
 }`
 
-function buildPrompt(text, linkAnalysis) {
+function buildPrompt(text, linkAnalysis, enableTagging) {
   let prompt = BASE_PROMPT
   if (linkAnalysis) prompt += LINK_PROMPT
+  if (enableTagging) prompt += TAGGING_PROMPT
   prompt += BASE_FORMAT
   return prompt
 }
@@ -69,12 +75,13 @@ export function extractJsonFromResponse(text) {
 export async function organizeWithAI(text, settings) {
   const { apiEndpoint, apiKey, modelName } = settings
   const linkAnalysis = settings.linkAnalysis !== false
+  const enableTagging = settings.enableTagging !== false
 
   if (!apiKey) {
     throw new Error('No API key configured. Add one in Settings.')
   }
 
-  const SYSTEM_PROMPT = buildPrompt(text, linkAnalysis)
+  const SYSTEM_PROMPT = buildPrompt(text, linkAnalysis, enableTagging)
 
   const isOllama = apiEndpoint.includes('localhost') || apiEndpoint.includes('0.0.0.0')
   const body = isOllama

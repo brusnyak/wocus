@@ -9,6 +9,7 @@ const blocks = [
   { id: 'todo', label: 'To-Do List', icon: '☐' },
   { id: 'bullet', label: 'Bullet List', icon: '•' },
   { id: 'number', label: 'Numbered List', icon: '1.' },
+  { id: 'calendar', label: 'Calendar / Date', icon: '📅' },
   { id: 'divider', label: 'Divider', icon: '—' },
   { id: 'code', label: 'Code Block', icon: '<>' },
 ]
@@ -34,6 +35,11 @@ function exec(id, editor) {
     case 'todo': editor.commands.toggleTaskList(); break
     case 'bullet': editor.commands.toggleBulletList(); break
     case 'number': editor.commands.toggleOrderedList(); break
+    case 'calendar':
+      const now = new Date()
+      const dateStr = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+      editor.commands.insertContent(dateStr)
+      break
     case 'divider': editor.commands.setHorizontalRule(); break
     case 'code': editor.commands.toggleCodeBlock(); break
   }

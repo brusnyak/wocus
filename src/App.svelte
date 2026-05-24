@@ -10,6 +10,10 @@
   import AboutModal from './lib/AboutModal.svelte'
   import Sidebar from './lib/Sidebar.svelte'
   import ChatPanel from './lib/ChatPanel.svelte'
+  import KanbanBoard from './lib/KanbanBoard.svelte'
+  import CalendarView from './lib/CalendarView.svelte'
+  import Pomodoro from './lib/Pomodoro.svelte'
+  import SmartLinks from './lib/SmartLinks.svelte'
 
   let s = getSettings()
   let settingsOpen = $state(false)
@@ -47,6 +51,9 @@ let templateName = $state('')
 let templates = $state([])
 let markdownView = $state(false)
 let markdownSource = $state('')
+let kanbanOpen = $state(false)
+let calendarOpen = $state(false)
+let noteTags = $state([])
 
   $effect(() => {
     document.documentElement.classList.toggle('ui-hidden', uiHidden)
@@ -228,7 +235,7 @@ let font = $derived(FONTS[fontIndex])
     organizing = true; error = ''
     try {
       const result = await organizeWithAI(latestText, {
-        apiEndpoint: s.apiEndpoint, apiKey: s.apiKey, modelName: s.modelName, linkAnalysis: s.linkAnalysis
+        apiEndpoint: s.apiEndpoint, apiKey: s.apiKey, modelName: s.modelName, linkAnalysis: s.linkAnalysis, enableTagging: true
       })
       if (result?.blocks && result.blocks.length > 0) {
         const tipTapJson = blocksToTipTapJson(result.blocks)
@@ -238,8 +245,48 @@ let font = $derived(FONTS[fontIndex])
         await saveNote($state.snapshot(note))
         requestAnimationFrame(() => loadContent())
       } else { error = 'AI returned empty content. Try again.' }
+      if (result?.tags) {
+        noteTags = result.tags
+      }
     } catch (e) { error = e.message || 'Failed to organize' }
     organizing = false
+  }
+
+  function handleUpdateTodos(updatedJson) {
+    if (!note) return
+    note.content = updatedJson
+    try {
+      const parsed = JSON.parse(updatedJson)
+      const html = parsed.content ? parsed.content.map(b => {
+        if (b.type === 'taskList') return '<ul data-type="taskList">' + (b.content || []).map(i => `<li><label><input type="checkbox" ${i.attrs?.checked ? 'checked' : ''}>${i.content?.[0]?.content?.[0]?.text || ''}</label></li>`).join('') + '</ul>'
+        return ''
+      }).join('\n') : ''
+      const text = parsed.content ? parsed.content.map(b => {
+        if (b.type === 'taskList') return (b.content || []).map(i => `[${i.attrs?.checked ? 'x' : ' '}] ${i.content?.[0]?.content?.[0]?.text || ''}`).join('\n')
+        return ''
+      }).join('\n') : ''
+      if (html) {
+        note.html = html
+        note.text = text
+      }
+    } catch {}
+    queueSave()
+  }
+
+  function handleInsertDate(dateStr) {
+    if (!editorApi) return
+    const { view } = editorApi.getEditor()
+    const tr = view.state.tr.insertText(dateStr, view.state.selection.to)
+    view.dispatch(tr)
+    view.focus()
+    const html = editorApi.getHTML()
+    const json = editorApi.getJSON()
+    note.html = html
+    note.content = JSON.stringify(json)
+    note.text = editorApi.getText()
+    updateCounts(note.text)
+    queueSave()
+    calendarOpen = false
   }
 
   function loadContent() {
@@ -545,6 +592,13 @@ let font = $derived(FONTS[fontIndex])
         <div class:markdown-visible={markdownView}>
           <div class="markdown-preview">{@html markdownSource}</div>
         </div>
+      {#if noteTags.length > 0}
+          <div class="tags-bar">
+            {#each noteTags as tag}
+              <span class="tag">{tag}</span>
+            {/each}
+          </div>
+        {/if}
       </article></section>
 
 {#if !uiHidden}
@@ -557,6 +611,12 @@ let font = $derived(FONTS[fontIndex])
         </button>
         <button class="icon-btn" onclick={organize} disabled={organizing} title="Organize with AI (⌘⌥O)">
           <i class="fa-solid fa-folder-tree"></i>
+        </button>
+        <button class="icon-btn" onclick={() => kanbanOpen = true} title="Kanban board">
+          <i class="fa-solid fa-columns"></i>
+        </button>
+        <button class="icon-btn" onclick={() => calendarOpen = true} title="Insert date">
+          <i class="fa-solid fa-calendar-days"></i>
         </button>
         <button class="icon-btn" onclick={exportMarkdown} title="Export Markdown">
           <i class="fa-solid fa-file-export"></i>
@@ -653,7 +713,13 @@ let font = $derived(FONTS[fontIndex])
        <Sidebar {headings} onNavigate={handleNavigate} />
      {/if}
 
-<SettingsModal open={settingsOpen} onclose={() => settingsOpen = false} />
+<KanbanBoard open={kanbanOpen} contentJson={note?.content || ''} onUpdateTodos={handleUpdateTodos} onclose={() => kanbanOpen = false} />
+      <CalendarView open={calendarOpen} onclose={() => calendarOpen = false} onInsertDate={handleInsertDate} />
+      <Pomodoro hidden={uiHidden} />
+      {#if headingElements.length > 1}
+        <SmartLinks noteText={note?.text || ''} {headingElements} />
+      {/if}
+      <SettingsModal open={settingsOpen} onclose={() => settingsOpen = false} />
       <HelpModal open={helpOpen} onclose={() => helpOpen = false} />
       <AboutModal open={aboutOpen} onclose={() => aboutOpen = false} />
       <ChatPanel
@@ -807,7 +873,23 @@ let font = $derived(FONTS[fontIndex])
     border-radius: 8px;
     z-index: 55;
 }
-.template-save-popup input {
+.tags-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 12px;
+  }
+  .tag {
+    display: inline-block;
+    padding: 3px 10px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.75em;
+    border-radius: 100px;
+    font-weight: 500;
+  }
+
+  .template-save-popup input {
     border: none; background: none; outline: none;
     color: var(--fg); font-size: 0.85em; width: 160px;
     font-family: inherit;
