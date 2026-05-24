@@ -9,6 +9,7 @@
   import HelpModal from './lib/HelpModal.svelte'
   import AboutModal from './lib/AboutModal.svelte'
   import Sidebar from './lib/Sidebar.svelte'
+  import ChatPanel from './lib/ChatPanel.svelte'
 
   let s = getSettings()
   let settingsOpen = $state(false)
@@ -44,6 +45,8 @@ let showTemplateMenu = $state(false)
 let showLoadTemplate = $state(false)
 let templateName = $state('')
 let templates = $state([])
+let markdownView = $state(false)
+let markdownSource = $state('')
 
   $effect(() => {
     document.documentElement.classList.toggle('ui-hidden', uiHidden)
@@ -95,6 +98,28 @@ let font = $derived(FONTS[fontIndex])
     note.text = text
     updateCounts(text)
     queueSave()
+  }
+
+  async function toggleMarkdownView() {
+    if (markdownView) {
+      const { marked } = await import('marked')
+      const html = await marked.parse(markdownSource)
+      if (editorApi) {
+        editorApi.setContent(html)
+        note.html = html
+        const div = document.createElement('div')
+        div.innerHTML = html
+        note.text = div.textContent || ''
+        updateCounts(note.text)
+        queueSave()
+      }
+      markdownView = false
+    } else {
+      const TurndownService = (await import('turndown')).default
+      const turndown = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced' })
+      markdownSource = turndown.turndown(note?.html || '')
+      markdownView = true
+    }
   }
 
   function blocksToTipTapNode(b) {
@@ -463,11 +488,16 @@ let font = $derived(FONTS[fontIndex])
   let typingTimeout = null
 
   function handleTyping() {
-    uiHidden = true
-    clearTimeout(typingTimeout)
-    typingTimeout = setTimeout(() => {
-      uiHidden = false
-    }, 3000) // Show UI after 3 seconds of inactivity
+    const tag = document.activeElement?.tagName || ''
+    const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+    const inSearch = document.activeElement?.closest('.search-bar')
+    if (isInput && !inSearch) {
+      uiHidden = true
+      clearTimeout(typingTimeout)
+      typingTimeout = setTimeout(() => {
+        uiHidden = false
+      }, 3000)
+    }
   }
 
   onMount(() => {
@@ -500,9 +530,13 @@ let font = $derived(FONTS[fontIndex])
       </div>
     {/if}
 
-     <section><article class="editor-wrap">
-       <Editor onUpdate={handleUpdate} onReady={handleReady} />
-     </article></section>
+<section><article class="editor-wrap">
+        {#if markdownView}
+          <textarea class="markdown-source" bind:value={markdownSource} oninput={() => { updateCounts(markdownSource); queueSave() }}></textarea>
+        {:else}
+          <Editor onUpdate={handleUpdate} onReady={handleReady} />
+        {/if}
+      </article></section>
 
 {#if !uiHidden}
      <div class="icons-top">
@@ -521,11 +555,11 @@ let font = $derived(FONTS[fontIndex])
         <button class="icon-btn" onclick={importMarkdown} title="Import Markdown">
           <i class="fa-solid fa-file-import"></i>
         </button>
+        <button class="icon-btn" onclick={toggleMarkdownView} title={markdownView ? 'Exit markdown view' : 'Markdown source'}>
+          <i class="fa-solid fa-code"></i>
+        </button>
         <button class="icon-btn" onclick={() => { templateName = ''; showTemplateMenu = !showTemplateMenu }} title="Save as template">
           <i class="fa-regular fa-floppy-disk"></i>
-        </button>
-        <button class="icon-btn" onclick={async () => { await loadTemplates(); showLoadTemplate = !showLoadTemplate }} title="Load template">
-          <i class="fa-regular fa-copy"></i>
         </button>
         <button class="icon-btn" onclick={() => settingsOpen = true} title="Settings">
           <i class="fa-solid fa-gear"></i>
@@ -551,22 +585,6 @@ let font = $derived(FONTS[fontIndex])
         <div class="template-save-popup">
           <input type="text" bind:value={templateName} placeholder="Template name..." onkeydown={(e) => e.key === 'Enter' && saveTemplate()} />
           <button class="icon-btn" onclick={saveTemplate} title="Save"><i class="fa-solid fa-check"></i></button>
-        </div>
-      {/if}
-      {#if showLoadTemplate}
-        <div class="template-load-popup">
-          <h3>Templates</h3>
-          {#if templates.length === 0}
-            <p class="empty-msg">No saved templates yet.</p>
-          {:else}
-            {#each templates as t}
-              <div class="template-item">
-                <span class="template-name">{t.name}</span>
-                <button class="icon-btn" onclick={() => applyTemplate(t)} title="Apply"><i class="fa-solid fa-check"></i></button>
-                <button class="icon-btn" onclick={() => deleteTemplate(t.id)} title="Delete"><i class="fa-solid fa-trash-can"></i></button>
-              </div>
-            {/each}
-          {/if}
         </div>
       {/if}
       {/if}
@@ -626,9 +644,17 @@ let font = $derived(FONTS[fontIndex])
        <Sidebar {headings} onNavigate={handleNavigate} />
      {/if}
 
-     <SettingsModal open={settingsOpen} onclose={() => settingsOpen = false} />
-     <HelpModal open={helpOpen} onclose={() => helpOpen = false} />
-     <AboutModal open={aboutOpen} onclose={() => aboutOpen = false} />
+<SettingsModal open={settingsOpen} onclose={() => settingsOpen = false} />
+      <HelpModal open={helpOpen} onclose={() => helpOpen = false} />
+      <AboutModal open={aboutOpen} onclose={() => aboutOpen = false} />
+      <ChatPanel
+        apiEndpoint={s.apiEndpoint}
+        apiKey={s.apiKey}
+        modelName={s.modelName}
+        noteText={note?.text || ''}
+        onOrganize={organize}
+        onError={(msg) => error = msg}
+      />
   </div>
 {/if}
 
@@ -776,29 +802,23 @@ let font = $derived(FONTS[fontIndex])
     font-family: inherit;
 }
 
-.template-load-popup {
-    position: fixed;
-    top: 16px;
-    right: 56px;
-    min-width: 220px;
-    max-height: 300px;
-    overflow-y: auto;
-    padding: 10px 14px;
-    background: var(--surface);
+
+
+.markdown-source {
+    width: 100%;
+    min-height: 70vh;
+    padding: 1rem;
     border: 1px solid var(--border);
     border-radius: 8px;
-    z-index: 55;
+    background: var(--code-bg);
+    color: var(--fg);
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.9em;
+    line-height: 1.6;
+    resize: vertical;
+    outline: none;
 }
-.template-load-popup h3 { margin: 0 0 8px 0; font-size: 0.9em; font-weight: 600; }
-.template-load-popup .empty-msg { font-size: 0.8em; color: var(--muted); margin: 0; }
-.template-item {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 0;
-}
-.template-item .template-name { flex: 1; font-size: 0.85em; }
-.template-item .icon-btn { width: 24px; height: 24px; font-size: 12px; }
+.markdown-source:focus { border-color: var(--accent); }
 
 :global(.ui-hidden) .icons-top,
 :global(.ui-hidden) .icons-bottom-right,

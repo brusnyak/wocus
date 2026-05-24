@@ -1,9 +1,11 @@
 <script>
   import { getSettings, PROVIDERS } from './settings.svelte.js'
+  import { getDb } from './db.js'
 
   let { open = false, onclose } = $props()
   let s = $derived(getSettings())
 
+  let activeTab = $state('connection')
   let activeProvider = $state('openrouter')
   let endpoint = $state('')
   let key = $state('')
@@ -11,6 +13,10 @@
   let customEndpoint = $state('')
   let testing = $state(false)
   let testResult = $state('')
+
+  let templates = $state([])
+  let templateName = $state('')
+  let savingTemplate = $state(false)
 
   let currentModels = $derived(PROVIDERS[activeProvider]?.models || [])
   let isCustom = $derived(activeProvider === 'custom')
@@ -24,6 +30,7 @@
       customEndpoint = ''
       if (activeProvider === 'custom') customEndpoint = s.apiEndpoint
       testResult = ''
+      loadTemplates()
     }
   })
 
@@ -58,7 +65,7 @@
       return
     }
     if (!model || model === 'openrouter-free') {
-      testResult = '⚠️ "openrouter-free" is not a valid model. Try openrouter/auto or model:free (e.g. mistralai/mistral-7b-instruct:free)'
+      testResult = '⚠️ "openrouter-free" is not a valid model. Try openrouter/auto or model:free'
       testing = false
       return
     }
@@ -87,6 +94,50 @@
     testing = false
   }
 
+  async function loadTemplates() {
+    const db = await getDb()
+    const all = await db.getAll('templates')
+    templates = all.sort((a, b) => b.createdAt - a.createdAt)
+  }
+
+  async function saveTemplateFromSettings() {
+    const name = templateName.trim()
+    if (!name) return
+    savingTemplate = true
+    const db = await getDb()
+    const currentNote = await db.get('notes', 1)
+    await db.put('templates', {
+      id: Date.now().toString(),
+      name,
+      content: currentNote?.content || '',
+      html: currentNote?.html || '',
+      text: currentNote?.text || '',
+      createdAt: Date.now()
+    })
+    templateName = ''
+    savingTemplate = false
+    await loadTemplates()
+  }
+
+  async function deleteTemplate(id) {
+    const db = await getDb()
+    await db.delete('templates', id)
+    await loadTemplates()
+  }
+
+  async function applyTemplateFromSettings(t) {
+    const db = await getDb()
+    const note = await db.get('notes', 1)
+    if (!note) return
+    note.content = t.content
+    note.html = t.html
+    note.text = t.text
+    note.updatedAt = Date.now()
+    await db.put('notes', note)
+    onclose?.()
+    setTimeout(() => window.location.reload(), 100)
+  }
+
   function handleOverlayClick(e) {
     if (e.target === e.currentTarget) onclose?.()
   }
@@ -99,67 +150,108 @@
         <h2>Settings</h2>
         <button class="close-btn" onclick={() => onclose?.()}>✕</button>
       </div>
+      <div class="tabs">
+        <button class="tab" class:active={activeTab === 'connection'} onclick={() => activeTab = 'connection'}>Connection</button>
+        <button class="tab" class:active={activeTab === 'templates'} onclick={() => activeTab = 'templates'}>Templates</button>
+      </div>
       <div class="modal-body">
-        <label class="field">
-          <span>Provider</span>
-          <select bind:value={activeProvider} onchange={onProviderChange}>
-            {#each Object.entries(PROVIDERS) as [key, p]}
-              <option value={key}>{p.label}</option>
-            {/each}
-          </select>
-        </label>
-
-        {#if isCustom}
+        {#if activeTab === 'connection'}
           <label class="field">
-            <span>API Endpoint</span>
-            <input type="url" bind:value={customEndpoint} placeholder="https://..." />
-          </label>
-        {:else}
-          <label class="field">
-            <span>API Endpoint</span>
-            <input type="url" bind:value={endpoint} disabled class="auto-filled" />
-          </label>
-        {/if}
-
-        <label class="field">
-          <span>API Key</span>
-          <input type="password" bind:value={key} placeholder={activeProvider === 'ollama' ? 'Not needed for local models' : 'sk-...'} disabled={activeProvider === 'ollama'} />
-        </label>
-
-        <label class="field">
-          <span>Model</span>
-          <input type="text" bind:value={model} list="model-suggestions" placeholder={activeProvider === 'openrouter' ? 'openrouter/auto, model:free, ...' : activeProvider === 'ollama' ? 'llama3, mistral, ...' : 'gpt-4o, ...'} />
-          {#if currentModels.length > 0}
-            <datalist id="model-suggestions">
-              {#each currentModels as m}
-                <option value={m}></option>
+            <span>Provider</span>
+            <select bind:value={activeProvider} onchange={onProviderChange}>
+              {#each Object.entries(PROVIDERS) as [key, p]}
+                <option value={key}>{p.label}</option>
               {/each}
-            </datalist>
-          {/if}
-        </label>
-
-        <label class="field toggle-field">
-          <span class="toggle-label">
-            <span>Link Context Analysis</span>
-            <span class="toggle-desc">When enabled, AI analyzes URLs in your notes and provides mini-summaries</span>
-          </span>
-          <label class="switch">
-            <input type="checkbox" checked={s.linkAnalysis} onchange={(e) => s.linkAnalysis = e.target.checked} />
-            <span class="slider"></span>
+            </select>
           </label>
-        </label>
 
-        <button class="test-btn" onclick={testConnection} disabled={testing}>
-          {testing ? 'Testing...' : 'Test Connection'}
-        </button>
-        {#if testResult}
-          <p class="test-result">{testResult}</p>
+          {#if isCustom}
+            <label class="field">
+              <span>API Endpoint</span>
+              <input type="url" bind:value={customEndpoint} placeholder="https://..." />
+            </label>
+          {:else}
+            <label class="field">
+              <span>API Endpoint</span>
+              <input type="url" bind:value={endpoint} disabled class="auto-filled" />
+            </label>
+          {/if}
+
+          <label class="field">
+            <span>API Key</span>
+            <input type="password" bind:value={key} placeholder={activeProvider === 'ollama' ? 'Not needed for local models' : 'sk-...'} disabled={activeProvider === 'ollama'} />
+          </label>
+
+          <label class="field">
+            <span>Model</span>
+            <input type="text" bind:value={model} list="model-suggestions" placeholder={activeProvider === 'openrouter' ? 'openrouter/auto, model:free, ...' : activeProvider === 'ollama' ? 'llama3, mistral, ...' : 'gpt-4o, ...'} />
+            {#if currentModels.length > 0}
+              <datalist id="model-suggestions">
+                {#each currentModels as m}
+                  <option value={m}></option>
+                {/each}
+              </datalist>
+            {/if}
+          </label>
+
+          <label class="field toggle-field">
+            <span class="toggle-label">
+              <span>Link Context Analysis</span>
+              <span class="toggle-desc">When enabled, AI analyzes URLs in your notes and provides mini-summaries</span>
+            </span>
+            <label class="switch">
+              <input type="checkbox" checked={s.linkAnalysis} onchange={(e) => s.linkAnalysis = e.target.checked} />
+              <span class="slider"></span>
+            </label>
+          </label>
+
+          <button class="test-btn" onclick={testConnection} disabled={testing}>
+            {testing ? 'Testing...' : 'Test Connection'}
+          </button>
+          {#if testResult}
+            <p class="test-result">{testResult}</p>
+          {/if}
+
+        {:else if activeTab === 'templates'}
+          <div class="template-section">
+            <div class="save-current">
+              <input type="text" bind:value={templateName} placeholder="Save current note as template..." onkeydown={(e) => e.key === 'Enter' && saveTemplateFromSettings()} />
+              <button class="small-btn" onclick={saveTemplateFromSettings} disabled={!templateName.trim() || savingTemplate}>
+                {savingTemplate ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+            <div class="template-grid">
+              {#each templates as t}
+                <div class="template-card">
+                  <div class="card-body">
+                    <span class="card-name">{t.name}</span>
+                    <span class="card-date">{new Date(t.createdAt).toLocaleDateString()}</span>
+                    <span class="card-preview">{t.text?.slice(0, 100) || 'Empty note'}</span>
+                  </div>
+                  <div class="card-actions">
+                    <button class="small-btn primary" onclick={() => applyTemplateFromSettings(t)} title="Apply to note">Apply</button>
+                    <button class="small-btn danger" onclick={() => deleteTemplate(t.id)} title="Delete">Delete</button>
+                  </div>
+                </div>
+              {:else}
+                <div class="empty-templates">
+                  <p>No templates yet. Save your current note as a template, or the defaults will appear once you create some.</p>
+                </div>
+              {/each}
+            </div>
+          </div>
         {/if}
       </div>
-      <div class="modal-footer">
-        <button class="cancel-btn" onclick={() => onclose?.()}>Cancel</button>
-        <button class="save-btn" onclick={handleSave}>Save</button>
-      </div>
+      {#if activeTab === 'connection'}
+        <div class="modal-footer">
+          <button class="cancel-btn" onclick={() => onclose?.()}>Cancel</button>
+          <button class="save-btn" onclick={handleSave}>Save</button>
+        </div>
+      {:else}
+        <div class="modal-footer">
+          <button class="cancel-btn" onclick={() => onclose?.()}>Close</button>
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -177,8 +269,11 @@
   .modal {
     background: var(--surface);
     border-radius: 12px;
-    width: 440px;
+    width: 520px;
     max-width: 90vw;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
     box-shadow: 0 8px 40px rgba(0,0,0,0.15);
   }
   .modal-header {
@@ -187,6 +282,7 @@
     justify-content: space-between;
     padding: 16px 20px;
     border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
   }
   .modal-header h2 {
     margin: 0;
@@ -202,11 +298,37 @@
     padding: 4px;
   }
   .close-btn:hover { color: var(--fg); }
+
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .tab {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 500;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .tab:hover { color: var(--fg); }
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
   .modal-body {
     padding: 20px;
     display: flex;
     flex-direction: column;
     gap: 14px;
+    overflow-y: auto;
+    flex: 1;
   }
   .field {
     display: flex;
@@ -226,9 +348,7 @@
     background: var(--surface);
     color: var(--fg);
   }
-  .field select {
-    cursor: pointer;
-  }
+  .field select { cursor: pointer; }
   .field input:focus, .field select:focus {
     outline: none;
     border-color: var(--accent);
@@ -241,38 +361,39 @@
     font-family: 'Roboto Mono', monospace;
     font-size: 0.8em;
   }
+
   .toggle-field {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-}
-.toggle-label {
+  }
+  .toggle-label {
     display: flex;
     flex-direction: column;
     gap: 2px;
-}
-.toggle-desc {
+  }
+  .toggle-desc {
     font-size: 0.78em;
     color: var(--muted);
     font-weight: 400;
-}
-.switch {
+  }
+  .switch {
     position: relative;
     display: inline-block;
     width: 36px;
     height: 20px;
     flex-shrink: 0;
-}
-.switch input { opacity: 0; width: 0; height: 0; }
-.slider {
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
     position: absolute;
     cursor: pointer;
     inset: 0;
     background: var(--border);
     border-radius: 20px;
     transition: 0.2s;
-}
-.slider::before {
+  }
+  .slider::before {
     content: '';
     position: absolute;
     height: 14px;
@@ -282,11 +403,11 @@
     background: #fff;
     border-radius: 50%;
     transition: 0.2s;
-}
-.switch input:checked + .slider { background: var(--accent); }
-.switch input:checked + .slider::before { transform: translateX(16px); }
+  }
+  .switch input:checked + .slider { background: var(--accent); }
+  .switch input:checked + .slider::before { transform: translateX(16px); }
 
-.test-btn {
+  .test-btn {
     padding: 8px 14px;
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -299,12 +420,120 @@
   .test-btn:hover { background: var(--hover); }
   .test-btn:disabled { opacity: 0.5; }
   .test-result { font-size: 0.85em; margin: 0; }
+
+  /* Templates tab */
+  .template-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .save-current {
+    display: flex;
+    gap: 6px;
+  }
+  .save-current input {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.85em;
+    background: var(--surface);
+    color: var(--fg);
+    outline: none;
+  }
+  .save-current input:focus { border-color: var(--accent); }
+
+  .small-btn {
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    cursor: pointer;
+    font-size: 0.8em;
+    color: var(--fg);
+    white-space: nowrap;
+  }
+  .small-btn:hover { background: var(--hover); }
+  .small-btn:disabled { opacity: 0.4; cursor: default; }
+  .small-btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .small-btn.primary:hover { filter: brightness(1.1); }
+  .small-btn.danger { color: #ef4444; }
+  .small-btn.danger:hover { background: rgba(220,38,38,0.1); }
+
+  .template-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .template-card {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg);
+    transition: border-color 0.15s;
+  }
+  .template-card:hover { border-color: var(--accent); }
+
+  .card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    flex: 1;
+  }
+  .card-name {
+    font-weight: 600;
+    font-size: 0.85em;
+    color: var(--fg);
+  }
+  .card-date {
+    font-size: 0.7em;
+    color: var(--muted);
+  }
+  .card-preview {
+    font-size: 0.75em;
+    color: var(--muted);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .card-actions {
+    display: flex;
+    gap: 4px;
+    padding: 6px 10px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .card-actions .small-btn { flex: 1; text-align: center; padding: 4px 8px; font-size: 0.75em; }
+
+  .empty-templates {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--muted);
+    font-size: 0.8em;
+  }
+  .empty-templates p { margin: 0; }
+
   .modal-footer {
     display: flex;
     justify-content: flex-end;
     gap: 8px;
     padding: 12px 20px;
     border-top: 1px solid var(--border);
+    flex-shrink: 0;
   }
   .cancel-btn, .save-btn {
     padding: 8px 16px;

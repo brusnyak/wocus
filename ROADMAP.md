@@ -11,6 +11,11 @@ No accounts, no servers, no data leaving your machine (except what you explicitl
 - Template system (save/load/delete templates, stored locally in IndexedDB)
 - AI link context analysis (toggle in Settings for privacy)
 - Fixed icon layout (top-right toolbar, bottom-right help/about, bottom-left word count)
+- Markdown source view toggle (edit raw markdown)
+- AI Chat panel (draggable, with /organize and /summarize commands)
+- Settings tabs (Connection + Templates gallery)
+- Default templates (Meeting Notes, Weekly Review, Project Plan, Journal Entry)
+- Search fix: typing in search no longer hides the UI
 
 ---
 
@@ -19,16 +24,6 @@ No accounts, no servers, no data leaving your machine (except what you explicitl
 ### Template Enhancements
 - Pre-installed starter templates (meeting notes, journal, project planning)
 - Template categories / search in load dialog
-
-### Mobile Optimization
-- Responsive layout for phones and tablets
-- Touch-friendly toolbar (larger tap targets, bottom sheet menus)
-- PWA install prompt improvements
-
-### Search Improvements
-- Fuzzy / substring matching (currently exact match only)
-- Match highlighting in the editor
-- Search-and-replace
 
 ### Quick Actions
 - `/todo` slash command creates a task list
@@ -50,12 +45,6 @@ No accounts, no servers, no data leaving your machine (except what you explicitl
 - **Context-aware summarization** — per-section or full-note summaries
 - **Smart linking** between related notes (local graph, no external service)
 - **Audio transcription** improvement with speaker detection
-
-### Knowledge Assistant
-- **Proactive suggestions** based on note content (e.g., "You mentioned X yesterday — want to follow up?")
-- **"Talk to your notes"** — conversational interface over your local note store
-- **Research assistant** — paste a URL, get a structured summary
-- **Spaced repetition** for learning notes (flashcard mode)
 
 ---
 
