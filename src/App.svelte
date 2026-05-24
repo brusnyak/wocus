@@ -11,9 +11,8 @@
   import Sidebar from './lib/Sidebar.svelte'
   import ChatPanel from './lib/ChatPanel.svelte'
   import KanbanBoard from './lib/KanbanBoard.svelte'
-  import CalendarView from './lib/CalendarView.svelte'
-  import Pomodoro from './lib/Pomodoro.svelte'
   import SmartLinks from './lib/SmartLinks.svelte'
+  import { detectSensitiveData } from './lib/ai.js'
 
   let s = getSettings()
   let settingsOpen = $state(false)
@@ -52,7 +51,6 @@ let templates = $state([])
 let markdownView = $state(false)
 let markdownSource = $state('')
 let kanbanOpen = $state(false)
-let calendarOpen = $state(false)
 let noteTags = $state([])
 
   $effect(() => {
@@ -232,6 +230,11 @@ let font = $derived(FONTS[fontIndex])
     if (!s.hasApiKey()) { error = 'Add an API key in Settings first.'; return }
     const latestText = note?.text || ''
     if (!latestText) { error = 'Nothing to organize — write some text first.'; return }
+    const sensitive = detectSensitiveData(latestText)
+    if (sensitive) {
+      const msg = `Your note may contain sensitive data:\n\n${sensitive.join('\n')}\n\nThis will be sent to ${s.modelName} at ${s.apiEndpoint}. Continue?`
+      if (!confirm(msg)) { organizing = false; return }
+    }
     organizing = true; error = ''
     try {
       const result = await organizeWithAI(latestText, {
@@ -271,22 +274,6 @@ let font = $derived(FONTS[fontIndex])
       }
     } catch {}
     queueSave()
-  }
-
-  function handleInsertDate(dateStr) {
-    if (!editorApi) return
-    const { view } = editorApi.getEditor()
-    const tr = view.state.tr.insertText(dateStr, view.state.selection.to)
-    view.dispatch(tr)
-    view.focus()
-    const html = editorApi.getHTML()
-    const json = editorApi.getJSON()
-    note.html = html
-    note.content = JSON.stringify(json)
-    note.text = editorApi.getText()
-    updateCounts(note.text)
-    queueSave()
-    calendarOpen = false
   }
 
   function loadContent() {
@@ -589,9 +576,9 @@ let font = $derived(FONTS[fontIndex])
         <div class:editor-hidden={markdownView}>
           <Editor onUpdate={handleUpdate} onReady={handleReady} />
         </div>
-        <div class:markdown-visible={markdownView}>
+        {#if markdownView}
           <div class="markdown-preview">{@html markdownSource}</div>
-        </div>
+        {/if}
       {#if noteTags.length > 0}
           <div class="tags-bar">
             {#each noteTags as tag}
@@ -614,9 +601,6 @@ let font = $derived(FONTS[fontIndex])
         </button>
         <button class="icon-btn" onclick={() => kanbanOpen = true} title="Kanban board">
           <i class="fa-solid fa-columns"></i>
-        </button>
-        <button class="icon-btn" onclick={() => calendarOpen = true} title="Insert date">
-          <i class="fa-solid fa-calendar-days"></i>
         </button>
         <button class="icon-btn" onclick={exportMarkdown} title="Export Markdown">
           <i class="fa-solid fa-file-export"></i>
@@ -714,8 +698,6 @@ let font = $derived(FONTS[fontIndex])
      {/if}
 
 <KanbanBoard open={kanbanOpen} contentJson={note?.content || ''} onUpdateTodos={handleUpdateTodos} onclose={() => kanbanOpen = false} />
-      <CalendarView open={calendarOpen} onclose={() => calendarOpen = false} onInsertDate={handleInsertDate} />
-      <Pomodoro hidden={uiHidden} />
       {#if headingElements.length > 1}
         <SmartLinks noteText={note?.text || ''} {headingElements} />
       {/if}

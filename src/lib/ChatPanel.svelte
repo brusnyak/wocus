@@ -10,6 +10,8 @@
     onError
   } = $props()
 
+  import { detectSensitiveData } from './ai.js'
+
   let open = $state(false)
   let messages = $state([])
   let input = $state('')
@@ -52,21 +54,6 @@
       error = ''
       if (!welcomeSent) {
         welcomeSent = true
-        messages = [
-          {
-            role: 'assistant',
-            id: 'welcome',
-            content: `👋 Hi! I'm **Wocus AI**, your note-taking assistant. I can help you with:
-
-✨ **Answer questions** about your note
-💡 **Brainstorm** ideas and expand on concepts
-📝 **Summarize** — type \`/summarize\` for a concise summary
-📂 **Organize** — type \`/organize\` to restructure your note
-🔍 **Proofread** and suggest improvements
-
-How can I help you today?`
-          }
-        ]
       }
       setTimeout(() => inputEl?.focus(), 50)
     }
@@ -93,6 +80,12 @@ How can I help you today?`
       onOrganize?.()
       messages = [...messages, { role: 'user', content: text }]
       return
+    }
+
+    const sensitive = detectSensitiveData(text) || (noteText && detectSensitiveData(noteText))
+    if (sensitive) {
+      const msg = `Your message or note may contain sensitive data:\n\n${sensitive.join('\n')}\n\nThis will be sent to ${modelName}. Continue?`
+      if (!confirm(msg)) return
     }
 
     messages = [...messages, { role: 'user', content: text }]

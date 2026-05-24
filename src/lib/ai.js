@@ -119,3 +119,20 @@ export async function organizeWithAI(text, settings) {
 
   return extractJsonFromResponse(rawText)
 }
+
+export function detectSensitiveData(text) {
+  if (!text) return null
+  const patterns = [
+    { regex: /sk-[A-Za-z0-9]{20,}/g, label: 'API key (OpenAI/Anthropic format)' },
+    { regex: /(?:api[_-]?key|apikey|api[_-]?secret|api[_-]?token)\s*[:=]\s*['"]?[A-Za-z0-9_\-]{16,}/gi, label: 'API credential' },
+    { regex: /eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+/g, label: 'JWT token' },
+    { regex: /AKIA[A-Z0-9]{16}/g, label: 'AWS access key' },
+    { regex: /-----BEGIN (?:RSA |EC |)?PRIVATE KEY-----/g, label: 'private key' },
+    { regex: /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g, label: 'long numeric sequence (credit card?)' },
+  ]
+  const findings = []
+  for (const { regex, label } of patterns) {
+    if (regex.test(text)) findings.push(label)
+  }
+  return findings.length > 0 ? findings : null
+}
