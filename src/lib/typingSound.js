@@ -2,6 +2,7 @@
 // Licensed under Creative Commons Attribution 4.0
 
 import { getSettings } from './settings.svelte.js'
+import cuePoints from './typewriter_cues.json'
 
 let ctx = null
 let buffer = null
@@ -32,6 +33,7 @@ async function loadBuffer() {
 
 export function playKeySound(type = 'letter') {
   if (!getSettings().typingSound) return
+  if (!cuePoints.length) return
   const ac = getContext()
   if (!buffer) {
     loadBuffer()
@@ -39,13 +41,11 @@ export function playKeySound(type = 'letter') {
   }
 
   try {
-    const len = buffer.duration
-    const dur = type === 'enter' ? 0.14 : type === 'space' ? 0.1 : 0.07
-    const maxStart = Math.max(0, len - dur)
-
-    const start = Math.random() * maxStart
-    const rate = 0.9 + Math.random() * 0.2
-    const vol = type === 'enter' ? 0.9 : type === 'space' ? 0.7 : 0.6
+    const idx = Math.floor(Math.random() * cuePoints.length)
+    const start = cuePoints[idx]
+    const dur = type === 'enter' ? 0.14 : type === 'space' ? 0.09 : 0.06
+    const rate = 0.92 + Math.random() * 0.16
+    const vol = type === 'enter' ? 0.85 : type === 'space' ? 0.65 : 0.55
 
     const source = ac.createBufferSource()
     source.buffer = buffer
