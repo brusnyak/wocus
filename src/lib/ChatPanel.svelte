@@ -4,6 +4,7 @@
     apiKey = '',
     modelName = 'gpt-4o-mini',
     noteText = '',
+    hidden = false,
     onOrganize,
     onError
   } = $props()
@@ -13,6 +14,7 @@
   let input = $state('')
   let loading = $state(false)
   let error = $state('')
+  let welcomeSent = $state(false)
 
   let x = $state(0)
   let y = $state(0)
@@ -47,8 +49,29 @@
     open = !open
     if (open) {
       error = ''
+      if (!welcomeSent) {
+        welcomeSent = true
+        messages = [
+          {
+            role: 'assistant',
+            content: `👋 Hi! I'm **Wocus AI**, your note-taking assistant. I can help you with:
+
+✨ **Answer questions** about your note
+💡 **Brainstorm** ideas and expand on concepts
+📝 **Summarize** — type \`/summarize\` for a concise summary
+📂 **Organize** — type \`/organize\` to restructure your note
+🔍 **Proofread** and suggest improvements
+
+How can I help you today?`
+          }
+        ]
+      }
       setTimeout(() => inputEl?.focus(), 50)
     }
+  }
+
+  function formatAIResponse(text) {
+    return text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
   }
 
   async function send() {
@@ -68,17 +91,18 @@
     loading = true
 
     try {
+      let res
       if (text === '/summarize') {
         if (!noteText.trim()) {
           throw new Error('Note is empty — nothing to summarize.')
         }
         const summaryMsg = `Please summarize the following note concisely:\n\n${noteText}`
-        const res = await fetchAI(summaryMsg, 'Summarize the provided note concisely, capturing the key points.')
-        messages = [...messages, { role: 'assistant', content: res }]
+        res = await fetchAI(summaryMsg, 'Summarize the provided note concisely, capturing the key points.')
       } else {
-        const res = await fetchAI(text)
-        messages = [...messages, { role: 'assistant', content: res }]
+        res = await fetchAI(text)
       }
+      res = formatAIResponse(res)
+      messages = [...messages, { role: 'assistant', content: res }]
     } catch (e) {
       error = e.message || 'Something went wrong'
       onError?.(error)
@@ -92,7 +116,19 @@
   }
 
   async function fetchAI(userMessage, systemOverride) {
-    const systemPrompt = systemOverride || `You are a helpful note-taking assistant. The user's current note contains the following text for context:\n\n${noteText || '(empty note)'}\n\nAnswer questions about the note, help brainstorm, and assist with writing tasks. Be concise and practical.`
+    const systemPrompt = systemOverride || `You are Wocus AI, a friendly and helpful note-taking assistant. The user's current note contains the following text for context:
+
+${noteText || '(empty note)'}
+
+Your capabilities:
+- Answer questions about the note content
+- Brainstorm and expand ideas
+- Type /summarize to get a concise summary
+- Type /organize to restructure the note
+- Proofread text and suggest improvements
+- Help with writing and editing tasks
+
+Be concise, practical, and maintain a warm, encouraging tone.`
 
     const body = {
       model: modelName,
@@ -141,7 +177,7 @@
   onmouseup={handleMouseUp}
 />
 
-<div class="panel" class:open bind:this={panelEl} style={positioned ? `left:${x}px;top:${y}px` : ''}>
+<div class="panel" class:open class:hidden bind:this={panelEl} style={positioned ? `left:${x}px;top:${y}px;bottom:auto;right:auto;` : ''}>
   <button class="toggle" onclick={toggle} aria-label={open ? 'Close chat' : 'Open chat'}>
     {#if open}
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -161,11 +197,11 @@
         class="header"
         bind:this={headerEl}
         onmousedown={handleMouseDown}
-role="toolbar"
-          aria-label="Drag handle"
-          tabindex="-1"
+        role="toolbar"
+        aria-label="Drag handle"
+        tabindex="-1"
       >
-        <span class="title">AI Chat</span>
+        <span class="title">Wocus AI</span>
         <span class="dots">
           <span></span><span></span><span></span>
         </span>
@@ -174,15 +210,30 @@ role="toolbar"
       <div class="messages" bind:this={messagesEl}>
         {#if messages.length === 0}
           <div class="empty">
-            <p>Ask me anything about your note, or try:</p>
-            <code>/summarize</code> &mdash; summarize this note<br>
-            <code>/organize</code> &mdash; organize this note
+            <div class="welcome-card">
+              <div class="welcome-icon">🤖</div>
+              <div class="welcome-name">Wocus AI</div>
+              <div class="welcome-tagline">Your intelligent note-taking assistant</div>
+              <div class="welcome-abilities">
+                <div class="ability">💬 Answer questions about your note</div>
+                <div class="ability">💡 Brainstorm ideas</div>
+                <div class="ability">📝 <code>/summarize</code> &mdash; get a concise summary</div>
+                <div class="ability">📂 <code>/organize</code> &mdash; restructure your note</div>
+                <div class="ability">🔍 Proofread &amp; improve your writing</div>
+              </div>
+            </div>
           </div>
         {/if}
 
         {#each messages as msg}
           <div class="msg" class:user={msg.role === 'user'} class:assistant={msg.role === 'assistant'}>
-            <div class="bubble">{msg.content}</div>
+            <div class="bubble">
+              {#if msg.role === 'assistant'}
+                {@html msg.content}
+              {:else}
+                {msg.content}
+              {/if}
+            </div>
           </div>
         {/each}
 
@@ -234,6 +285,11 @@ role="toolbar"
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
+  .panel.hidden .toggle {
+    opacity: 0;
+    pointer-events: none;
+  }
+
   .toggle {
     width: 44px;
     height: 44px;
@@ -258,12 +314,15 @@ role="toolbar"
   .card {
     width: 360px;
     max-height: 500px;
+    min-width: 280px;
+    min-height: 300px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: auto;
+    resize: both;
     box-shadow: 0 4px 24px rgba(0,0,0,0.12);
     animation: slideIn 0.18s ease-out;
   }
@@ -316,16 +375,49 @@ role="toolbar"
     text-align: center;
     color: var(--muted);
     font-size: 0.78em;
-    padding: 24px 8px;
+    padding: 16px 8px;
     line-height: 1.6;
   }
-  .empty p { margin: 0 0 8px; }
-  .empty code {
+
+  .welcome-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .welcome-icon {
+    font-size: 2.4em;
+    margin-bottom: 4px;
+  }
+  .welcome-name {
+    font-size: 1.15em;
+    font-weight: 700;
+    color: var(--fg);
+  }
+  .welcome-tagline {
+    font-size: 0.9em;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .welcome-abilities {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    text-align: left;
+  }
+  .ability {
     background: var(--bg);
-    padding: 1px 6px;
-    border-radius: 4px;
+    padding: 5px 10px;
+    border-radius: 6px;
     font-size: 0.95em;
+    color: var(--fg);
+  }
+  .ability code {
+    background: var(--surface);
+    padding: 1px 5px;
+    border-radius: 3px;
     color: var(--accent);
+    font-size: 0.95em;
   }
 
   .msg {
@@ -349,6 +441,10 @@ role="toolbar"
     line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-word;
+  }
+  .bubble :global(a) {
+    color: var(--accent);
+    text-decoration: underline;
   }
   .msg.user .bubble {
     background: var(--accent);

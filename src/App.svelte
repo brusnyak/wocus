@@ -104,14 +104,15 @@ let font = $derived(FONTS[fontIndex])
     if (markdownView) {
       const { marked } = await import('marked')
       const html = await marked.parse(markdownSource)
+      note.html = html
+      const div = document.createElement('div')
+      div.innerHTML = html
+      note.text = div.textContent || ''
+      note.content = ''
+      updateCounts(note.text)
+      queueSave()
       if (editorApi) {
-        editorApi.setContent(html)
-        note.html = html
-        const div = document.createElement('div')
-        div.innerHTML = html
-        note.text = div.textContent || ''
-        updateCounts(note.text)
-        queueSave()
+        try { editorApi.setContent(html) } catch (e) { editorApi.setContent(note.html) }
       }
       markdownView = false
     } else {
@@ -531,11 +532,12 @@ let font = $derived(FONTS[fontIndex])
     {/if}
 
 <section><article class="editor-wrap">
-        {#if markdownView}
-          <textarea class="markdown-source" bind:value={markdownSource} oninput={() => { updateCounts(markdownSource); queueSave() }}></textarea>
-        {:else}
+        <div class:editor-hidden={markdownView}>
           <Editor onUpdate={handleUpdate} onReady={handleReady} />
-        {/if}
+        </div>
+        <div class:markdown-visible={markdownView}>
+          <textarea class="markdown-source" bind:value={markdownSource} oninput={() => { updateCounts(markdownSource); queueSave() }}></textarea>
+        </div>
       </article></section>
 
 {#if !uiHidden}
@@ -556,7 +558,7 @@ let font = $derived(FONTS[fontIndex])
           <i class="fa-solid fa-file-import"></i>
         </button>
         <button class="icon-btn" onclick={toggleMarkdownView} title={markdownView ? 'Exit markdown view' : 'Markdown source'}>
-          <i class="fa-solid fa-code"></i>
+          <i class="fa-brands fa-markdown"></i>
         </button>
         <button class="icon-btn" onclick={() => { templateName = ''; showTemplateMenu = !showTemplateMenu }} title="Save as template">
           <i class="fa-regular fa-floppy-disk"></i>
@@ -648,6 +650,7 @@ let font = $derived(FONTS[fontIndex])
       <HelpModal open={helpOpen} onclose={() => helpOpen = false} />
       <AboutModal open={aboutOpen} onclose={() => aboutOpen = false} />
       <ChatPanel
+        hidden={uiHidden}
         apiEndpoint={s.apiEndpoint}
         apiKey={s.apiKey}
         modelName={s.modelName}
@@ -803,6 +806,8 @@ let font = $derived(FONTS[fontIndex])
 }
 
 
+
+.editor-hidden { display: none; }
 
 .markdown-source {
     width: 100%;
