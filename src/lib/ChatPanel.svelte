@@ -11,6 +11,7 @@
   } = $props()
 
   import { detectSensitiveData } from './ai.js'
+  import { getAllNotes } from './db.js'
 
   let open = $state(false)
   let messages = $state([])
@@ -79,6 +80,17 @@
       if (!welcomeSent) {
         welcomeSent = true
       }
+      // Keep card visible: reposition if near viewport edges
+      if (!positioned) {
+        x = window.innerWidth - 400
+        y = window.innerHeight - 540
+        positioned = true
+      } else {
+        x = Math.min(x, window.innerWidth - 380)
+        y = Math.min(y, window.innerHeight - 320)
+        x = Math.max(x, 8)
+        y = Math.max(y, 8)
+      }
       setTimeout(() => inputEl?.focus(), 50)
     }
   }
@@ -141,17 +153,31 @@
   }
 
   async function fetchAI(userMessage, systemOverride) {
+    let allNotesContext = '(no other notes)'
+    try {
+      const all = await getAllNotes()
+      if (all.length > 1) {
+        allNotesContext = all.map(n =>
+          `- "${n.title}" (ID: ${n.id}${n.parentId ? `, parent: ${n.parentId}` : ''}): ${(n.text || '').slice(0, 200)}`
+        ).join('\n')
+      }
+    } catch {}
+
     const systemPrompt = systemOverride || `You are Wocus AI, a friendly and helpful note-taking assistant. The user's current note contains the following text for context:
 
 ${noteText || '(empty note)'}
 
+All notes in the workspace:
+${allNotesContext}
+
 Your capabilities:
-- Answer questions about the note content
+- Answer questions about the note content or any note in the workspace
 - Brainstorm and expand ideas
 - Type /summarize to get a concise summary
 - Type /organize to restructure the note
 - Proofread text and suggest improvements
 - Help with writing and editing tasks
+- Refer to other notes by their title when providing cross-note insights
 
 Be concise, practical, and maintain a warm, encouraging tone.`
 

@@ -4,6 +4,7 @@
   import StarterKit from '@tiptap/starter-kit'
   import Placeholder from '@tiptap/extension-placeholder'
   import TaskList from '@tiptap/extension-task-list'
+  import Link from '@tiptap/extension-link'
   import { KanbanTaskItem } from './kanbanTaskItem.js'
   import { Details, DetailsContent, DetailsSummary } from './toggle.js'
   import SlashCommandExtension from './slash.js'
@@ -27,6 +28,7 @@
         }),
         TaskList,
         KanbanTaskItem.configure({ nested: true }),
+        Link.configure({ openOnClick: false }),
         Details,
         DetailsContent,
         DetailsSummary,

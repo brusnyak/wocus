@@ -12,62 +12,70 @@ function getContext() {
   return ctx
 }
 
-function noiseBuffer(ac, dur) {
+function makeNoise(ac, dur) {
   const len = Math.ceil(ac.sampleRate * dur)
   const buf = ac.createBuffer(1, len, ac.sampleRate)
-  const data = buf.getChannelData(0)
-  for (let i = 0; i < data.length; i++) {
-    data[i] = Math.random() * 2 - 1
-  }
+  const d = buf.getChannelData(0)
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1
   return buf
 }
 
 export function playKeySound(type = 'letter') {
   if (!getSettings().typingSound) return
   const ac = getContext()
+  const now = ac.currentTime
+  const t = type === 'enter' ? 'enter' : type === 'space' ? 'space' : 'letter'
 
   try {
-    const vol = type === 'enter' ? 0.55 : type === 'space' ? 0.35 : 0.3
-    const clickFreq = type === 'enter' ? 1800 : type === 'space' ? 2200 : 2500
-    const clickDecay = type === 'enter' ? 0.06 : type === 'space' ? 0.05 : 0.04
-    const thudFreq = type === 'enter' ? 100 : type === 'space' ? 130 : 160
-    const thudDecay = type === 'enter' ? 0.08 : type === 'space' ? 0.07 : 0.06
-    const now = ac.currentTime
+    // --- Layer 1: Metallic ring (short sine burst, high pitch) ---
+    const ring = ac.createOscillator()
+    ring.type = 'sine'
+    ring.frequency.value = t === 'enter' ? 2800 : t === 'space' ? 3200 : 3600
+    const ringGain = ac.createGain()
+    const ringVol = t === 'enter' ? 0.25 : t === 'space' ? 0.18 : 0.2
+    ringGain.gain.setValueAtTime(0, now)
+    ringGain.gain.linearRampToValueAtTime(ringVol, now + 0.001)
+    ringGain.gain.exponentialRampToValueAtTime(0.001, now + 0.035)
 
-    // Click: noise through bandpass
-    const clickBuf = noiseBuffer(ac, clickDecay + 0.01)
-    const click = ac.createBufferSource()
-    click.buffer = clickBuf
+    // Add a very slight pitch glide for realism
+    ring.frequency.setValueAtTime(t === 'enter' ? 2800 : 3600, now)
+    ring.frequency.exponentialRampToValueAtTime(t === 'enter' ? 2400 : 3000, now + 0.03)
 
+    ring.connect(ringGain)
+    ringGain.connect(ac.destination)
+    ring.start(now)
+    ring.stop(now + 0.04)
+
+    // --- Layer 2: Mechanical clatter (noise burst) ---
+    const noise = ac.createBufferSource()
+    noise.buffer = makeNoise(ac, 0.03)
     const bandpass = ac.createBiquadFilter()
     bandpass.type = 'bandpass'
-    bandpass.frequency.value = clickFreq
-    bandpass.Q.value = 0.8
+    bandpass.frequency.value = t === 'enter' ? 1500 : 2000
+    bandpass.Q.value = 0.6
+    const noiseGain = ac.createGain()
+    const noiseVol = t === 'enter' ? 0.35 : t === 'space' ? 0.2 : 0.25
+    noiseGain.gain.setValueAtTime(0, now)
+    noiseGain.gain.linearRampToValueAtTime(noiseVol, now + 0.001)
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.025)
+    noise.connect(bandpass)
+    bandpass.connect(noiseGain)
+    noiseGain.connect(ac.destination)
+    noise.start(now)
+    noise.stop(now + 0.03)
 
-    const clickGain = ac.createGain()
-    clickGain.gain.setValueAtTime(0, now)
-    clickGain.gain.linearRampToValueAtTime(vol, now + 0.001)
-    clickGain.gain.exponentialRampToValueAtTime(0.001, now + clickDecay)
-
-    click.connect(bandpass)
-    bandpass.connect(clickGain)
-    clickGain.connect(ac.destination)
-    click.start(now)
-    click.stop(now + clickDecay + 0.01)
-
-    // Thud: low sine
+    // --- Layer 3: Impact thud (low sine) ---
     const thud = ac.createOscillator()
     thud.type = 'sine'
-    thud.frequency.value = thudFreq
-
+    thud.frequency.value = t === 'enter' ? 90 : 120
     const thudGain = ac.createGain()
+    const thudVol = t === 'enter' ? 0.4 : t === 'space' ? 0.2 : 0.25
     thudGain.gain.setValueAtTime(0, now)
-    thudGain.gain.linearRampToValueAtTime(vol * 0.6, now + 0.002)
-    thudGain.gain.exponentialRampToValueAtTime(0.001, now + thudDecay)
-
+    thudGain.gain.linearRampToValueAtTime(thudVol, now + 0.003)
+    thudGain.gain.exponentialRampToValueAtTime(0.001, now + (t === 'enter' ? 0.08 : 0.055))
     thud.connect(thudGain)
     thudGain.connect(ac.destination)
     thud.start(now)
-    thud.stop(now + thudDecay + 0.01)
+    thud.stop(now + (t === 'enter' ? 0.09 : 0.06))
   } catch {}
 }

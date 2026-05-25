@@ -124,14 +124,15 @@ let font = $derived(FONTS[fontIndex])
     const sub = await createNote({ title: name, parentId: currentNoteId })
     notes = await getAllNotes()
     if (editorApi) {
-      const { view } = editorApi.getEditor()
-      const linkHtml = `<a href="page://${sub.id}">📄 ${name}</a>`
-      const tr = view.state.tr.insertText(linkHtml, view.state.selection.to)
-      view.dispatch(tr)
-      note.content = JSON.stringify(view.state.doc.toJSON())
-      note.html = editorApi.getHTML()
-      note.text = editorApi.getText()
-      queueSave()
+      const editor = editorApi.getEditor()
+      editor.commands.insertContent({
+        type: 'paragraph',
+        content: [{
+          type: 'text',
+          text: `📄 ${name}`,
+          marks: [{ type: 'link', attrs: { href: `page://${sub.id}` } }]
+        }]
+      })
     }
   }
 
@@ -410,6 +411,7 @@ let font = $derived(FONTS[fontIndex])
   }
 
    let voiceStopRequested = false
+   let voicePos = null
 
    function toggleVoice() {
       if (listening) {
@@ -429,32 +431,47 @@ let font = $derived(FONTS[fontIndex])
       }
       voiceStopRequested = false
 
+      // Focus editor and store cursor position
+      const ed = getCurrentEditor()
+      if (ed) {
+        const { view } = ed.getEditor()
+        view.focus()
+        voicePos = view.state.selection.to
+      } else {
+        voicePos = null
+      }
+
       function startRec() {
         if (voiceStopRequested) return
         const sr = new SpeechRecognition()
         sr.lang = 'en-US'
         sr.interimResults = true
         sr.continuous = true
-        let finalizedText = ''
         let keepaliveTimer = null
 
         sr.onresult = (e) => {
           let interim = ''
+          let finalized = ''
           for (let i = e.resultIndex; i < e.results.length; i++) {
             const transcript = e.results[i][0].transcript
             if (e.results[i].isFinal) {
-              finalizedText += transcript + ' '
+              finalized += transcript + ' '
             } else {
               interim += transcript
             }
           }
           interimText = interim
+          if (!finalized.trim()) return
           const editor = getCurrentEditor()
-          if (editor && finalizedText.trim()) {
+          if (editor) {
             const { view } = editor.getEditor()
-            const tr = view.state.tr.insertText(finalizedText, view.state.selection.to)
+            view.focus()
+            const pos = voicePos !== null && voicePos <= view.state.doc.content.size
+              ? voicePos
+              : view.state.selection.to
+            const tr = view.state.tr.insertText(finalized, pos)
             view.dispatch(tr)
-            finalizedText = ''
+            voicePos = pos + finalized.length
           }
         }
 
@@ -481,7 +498,6 @@ let font = $derived(FONTS[fontIndex])
           }
         }
 
-        // Keepalive: restart silently every 15s to prevent Chrome from killing it
         keepaliveTimer = setInterval(() => {
           if (!voiceStopRequested && sr) {
             try { sr.stop(); sr.start() } catch {}
