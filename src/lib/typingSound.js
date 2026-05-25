@@ -42,21 +42,20 @@ export function playKeySound(type = 'letter') {
 
   try {
     const idx = Math.floor(Math.random() * cuePoints.length)
-    const start = cuePoints[idx]
-    const dur = type === 'enter' ? 0.14 : type === 'space' ? 0.09 : 0.06
-    const rate = 0.92 + Math.random() * 0.16
-    const vol = type === 'enter' ? 0.85 : type === 'space' ? 0.65 : 0.55
+    const start = cuePoints[idx] - 0.004
+    const dur = type === 'enter' ? 0.16 : type === 'space' ? 0.12 : 0.08
+    const vol = type === 'enter' ? 0.8 : type === 'space' ? 0.6 : 0.5
 
     const source = ac.createBufferSource()
     source.buffer = buffer
-    source.playbackRate.value = rate
+    source.playbackRate.value = 1.0
 
     const gain = ac.createGain()
     gain.gain.setValueAtTime(vol, ac.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur / rate)
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur)
 
     source.connect(gain)
     gain.connect(ac.destination)
-    source.start(0, start, dur / rate)
+    source.start(0, Math.max(0, start), dur)
   } catch {}
 }
