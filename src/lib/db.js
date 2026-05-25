@@ -1,7 +1,7 @@
 import { openDB } from 'idb'
 
 const DB_NAME = 'wocus'
-const DB_VERSION = 3
+const DB_VERSION = 4
 
 let dbPromise
 
@@ -68,42 +68,67 @@ export function getDb() {
           const tx = transaction.objectStore('templates')
           seedDefaults(tx)
         }
+        if (oldVersion < 4 && db.objectStoreNames.contains('notes')) {
+          const store = transaction.objectStore('notes')
+          if (!store.indexNames.contains('parentId')) {
+            store.createIndex('parentId', 'parentId')
+          }
+        }
       }
     })
   }
   return dbPromise
 }
 
-export async function ensureNote() {
-  const db = await getDb()
-  const tx = db.transaction('notes', 'readwrite')
-  const store = tx.objectStore('notes')
-  let note = await store.get(1)
-  if (!note) {
-    note = {
-      id: 1,
-      content: '',
-      title: 'Untitled',
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    }
-    await store.put(note)
-  }
-  return note
-}
-
-export async function saveNote(data) {
-  const db = await getDb()
-  const note = {
-    id: 1,
+function sanitizeNote(data) {
+  return {
+    id: data.id || 0,
     content: typeof data.content === 'string' ? data.content : '',
     html: typeof data.html === 'string' ? data.html : '',
     text: typeof data.text === 'string' ? data.text : '',
     title: data.title || 'Untitled',
+    parentId: data.parentId || null,
     createdAt: data.createdAt || Date.now(),
     updatedAt: Date.now()
   }
+}
+
+export async function getAllNotes() {
+  const db = await getDb()
+  const all = await db.getAll('notes')
+  all.sort((a, b) => b.updatedAt - a.updatedAt)
+  return all
+}
+
+export async function getNote(id) {
+  const db = await getDb()
+  return db.get('notes', id)
+}
+
+export async function createNote(data = {}) {
+  const db = await getDb()
+  const note = sanitizeNote({ ...data, createdAt: Date.now(), updatedAt: Date.now() })
+  delete note.id
+  const id = await db.add('notes', note)
+  return { ...note, id }
+}
+
+export async function saveNote(data) {
+  const db = await getDb()
+  const note = sanitizeNote(data)
   await db.put('notes', note)
+  return note
+}
+
+export async function deleteNote(id) {
+  const db = await getDb()
+  await db.delete('notes', id)
+}
+
+export async function ensureNote() {
+  const all = await getAllNotes()
+  if (all.length > 0) return all[0]
+  return createNote({ title: 'Untitled' })
 }
 
 export async function getSetting(key) {

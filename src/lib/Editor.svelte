@@ -68,6 +68,15 @@
               }
               return true
             }
+            const link = event.target.closest('a')
+            if (link && link.href?.startsWith('page://')) {
+              event.preventDefault()
+              const noteId = parseInt(link.href.replace('page://', ''), 10)
+              if (!isNaN(noteId)) {
+                window.dispatchEvent(new CustomEvent('wocus-navigate-page', { detail: { noteId } }))
+              }
+              return true
+            }
             return false
           }
         }

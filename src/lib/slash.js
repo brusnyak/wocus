@@ -6,6 +6,7 @@ const blocks = [
   { id: 'h2', label: 'Heading 2', icon: 'H2' },
   { id: 'h3', label: 'Heading 3', icon: 'H3' },
   { id: 'toggle', label: 'Toggle', icon: '▶' },
+  { id: 'page', label: 'Page', icon: '📄' },
   { id: 'todo', label: 'To-Do List', icon: '☐' },
   { id: 'bullet', label: 'Bullet List', icon: '•' },
   { id: 'number', label: 'Numbered List', icon: '1.' },
@@ -23,6 +24,9 @@ function exec(id, editor) {
     case 'h1': editor.commands.toggleHeading({ level: 1 }); break
     case 'h2': editor.commands.toggleHeading({ level: 2 }); break
     case 'h3': editor.commands.toggleHeading({ level: 3 }); break
+    case 'page':
+      window.dispatchEvent(new CustomEvent('wocus-create-page'))
+      hideMenu(); return
     case 'toggle':
       editor.commands.insertContent({
         type: 'details',

@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { TextSelection } from '@tiptap/pm/state'
-  import { ensureNote, saveNote, getDb } from './lib/db.js'
+  import { ensureNote, saveNote, getDb, getAllNotes, getNote, createNote } from './lib/db.js'
   import { getSettings } from './lib/settings.svelte.js'
   import { organizeWithAI } from './lib/ai.js'
   import Editor from './lib/Editor.svelte'
@@ -12,6 +12,7 @@
   import ChatPanel from './lib/ChatPanel.svelte'
   import KanbanBoard from './lib/KanbanBoard.svelte'
   import SmartLinks from './lib/SmartLinks.svelte'
+  import NoteSidebar from './lib/NoteSidebar.svelte'
   import { detectSensitiveData } from './lib/ai.js'
 
   let s = getSettings()
@@ -20,6 +21,9 @@
   let aboutOpen = $state(false)
   let note = $state(null)
   let loaded = $state(false)
+  let currentNoteId = $state(null)
+  let notes = $state([])
+  let sidebarCollapsed = $state(false)
   let organizing = $state(false)
   let error = $state('')
   let headingElements = $state([])
@@ -68,10 +72,18 @@ let font = $derived(FONTS[fontIndex])
 
   async function load() {
     await s.load()
-    const n = await ensureNote()
+    const all = await getAllNotes()
+    notes = all
+    let n
+    if (all.length > 0) {
+      n = all[0]
+    } else {
+      n = await createNote({ title: 'Untitled' })
+      notes = [n]
+    }
+    currentNoteId = n.id
     themeIndex = THEMES.indexOf(s.darkMode ? 'dark' : 'light')
     if (themeIndex === -1) themeIndex = 0
-    // Migrate old schema
     if (!n.content && (n.rawContent || n.organizedContent)) {
       n.content = n.organizedContent || n.rawContent || ''
       n.html = n.organizedHtml || n.rawHtml || ''
@@ -82,6 +94,49 @@ let font = $derived(FONTS[fontIndex])
     note = n
     updateCounts(note.text)
     loaded = true
+  }
+
+  async function handleSelectNote(id) {
+    if (id === currentNoteId || !loaded) return
+    if (note) await saveNote({ ...$state.snapshot(note), id: currentNoteId })
+    const n = await getNote(id)
+    if (!n) return
+    currentNoteId = id
+    note = n
+    noteTags = []
+    headingElements = extractSections(n.content || '').map(s => s.heading)
+    updateCounts(n.text || '')
+    requestAnimationFrame(() => {
+      if (editorApi) {
+        try { editorApi.setContent(JSON.parse(n.content || '{"type":"doc","content":[]}')) } catch { editorApi.setContent('') }
+      }
+    })
+  }
+
+  function autoTitle(text) {
+    const firstLine = (text || '').trim().split('\n')[0] || ''
+    return firstLine.slice(0, 60) || 'Untitled'
+  }
+
+  async function handleCreatePage(e) {
+    const name = prompt('New page name:', '')
+    if (!name) return
+    const sub = await createNote({ title: name, parentId: currentNoteId })
+    notes = await getAllNotes()
+    if (editorApi) {
+      const { view } = editorApi.getEditor()
+      const linkHtml = `<a href="page://${sub.id}">📄 ${name}</a>`
+      const tr = view.state.tr.insertText(linkHtml, view.state.selection.to)
+      view.dispatch(tr)
+      note.content = JSON.stringify(view.state.doc.toJSON())
+      note.html = editorApi.getHTML()
+      note.text = editorApi.getText()
+      queueSave()
+    }
+  }
+
+  function handleNavigateToPage(e) {
+    handleSelectNote(e.detail.noteId)
   }
 
   function updateCounts(text) {
@@ -103,6 +158,13 @@ let font = $derived(FONTS[fontIndex])
     note.text = text
     updateCounts(text)
     queueSave()
+    const t = autoTitle(text)
+    if (t !== note.title) {
+      note.title = t
+      saveNote({ ...$state.snapshot(note), id: currentNoteId }).then(() => {
+        getAllNotes().then(all => { notes = all })
+      })
+    }
   }
 
   async function toggleMarkdownView() {
@@ -583,10 +645,14 @@ let font = $derived(FONTS[fontIndex])
         uiHidden = true
       }, 3000)
     })
+    document.addEventListener('wocus-create-page', handleCreatePage)
+    document.addEventListener('wocus-navigate-page', handleNavigateToPage)
     return () => {
       document.removeEventListener('keydown', handleKeydown)
       document.removeEventListener('keydown', handleTyping)
       document.removeEventListener('mousemove', () => {})
+      document.removeEventListener('wocus-create-page', handleCreatePage)
+      document.removeEventListener('wocus-navigate-page', handleNavigateToPage)
     }
   })
 </script>
@@ -594,7 +660,7 @@ let font = $derived(FONTS[fontIndex])
 {#if !loaded}
   <div class="loading">Loading...</div>
 {:else}
-  <div class="app-shell" class:font-serif={font === 'serif'} class:font-sans={font === 'sans-serif'}>
+  <div class="app-shell" class:font-serif={font === 'serif'} class:font-sans={font === 'sans-serif'} class:sidebar-open={!sidebarCollapsed}>
     {#if error}
       <div class="error-toast">
         <span>{error}</span>
@@ -602,7 +668,14 @@ let font = $derived(FONTS[fontIndex])
       </div>
     {/if}
 
-<section><article class="editor-wrap">
+    <NoteSidebar
+      {currentNoteId}
+      onSelectNote={handleSelectNote}
+      collapsed={sidebarCollapsed}
+      ontoggle={() => sidebarCollapsed = !sidebarCollapsed}
+    />
+
+<section class="main-content"><article class="editor-wrap">
         <div class:editor-hidden={markdownView}>
           <Editor onUpdate={handleUpdate} onReady={handleReady} />
         </div>
@@ -755,13 +828,14 @@ let font = $derived(FONTS[fontIndex])
   .app-shell {
     height: 100vh; overflow-y: scroll;
     background: var(--bg); color: var(--fg);
-    transition: background 0.3s, color 0.3s;
+    transition: background 0.3s, color 0.3s, padding-left 0.25s ease;
     padding: 50px 80px;
     font-family: 'Roboto Mono', monospace;
   }
   .app-shell.font-serif { font-family: 'Roboto Slab', Georgia, serif; }
   .app-shell.font-sans { font-family: Roboto, Arial, Helvetica, sans-serif; }
-  section { max-width: 800px; margin: auto; line-height: 1.8; font-size: 16px; }
+  .app-shell.sidebar-open { padding-left: 340px; }
+  .main-content { max-width: 800px; margin: auto; line-height: 1.8; font-size: 16px; }
   .editor-wrap { min-height: 80vh; }
 
   .error-toast {
