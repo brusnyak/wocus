@@ -4,7 +4,7 @@
   import StarterKit from '@tiptap/starter-kit'
   import Placeholder from '@tiptap/extension-placeholder'
   import TaskList from '@tiptap/extension-task-list'
-  import TaskItem from '@tiptap/extension-task-item'
+  import { KanbanTaskItem } from './kanbanTaskItem.js'
   import { Details, DetailsContent, DetailsSummary } from './toggle.js'
   import SlashCommandExtension from './slash.js'
   import { playKeySound } from './typingSound.js'
@@ -26,7 +26,7 @@
           placeholder: 'Type / for blocks, or just start writing...'
         }),
         TaskList,
-        TaskItem.configure({ nested: true }),
+        KanbanTaskItem.configure({ nested: true }),
         Details,
         DetailsContent,
         DetailsSummary,

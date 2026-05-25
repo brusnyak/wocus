@@ -39,14 +39,25 @@
 
   function handleMouseMove(e) {
     if (!dragging) return
-    x = e.clientX - dragOffsetX
-    y = e.clientY - dragOffsetY
+    x = Math.max(0, Math.min(e.clientX - dragOffsetX, window.innerWidth - 60))
+    y = Math.max(0, Math.min(e.clientY - dragOffsetY, window.innerHeight - 60))
     positioned = true
   }
 
   function handleMouseUp() {
+    if (!dragging) return
     dragging = false
+    try { localStorage.setItem('wocus_chat_x', x); localStorage.setItem('wocus_chat_y', y) } catch {}
   }
+
+  function restorePosition() {
+    try {
+      const sx = localStorage.getItem('wocus_chat_x')
+      const sy = localStorage.getItem('wocus_chat_y')
+      if (sx && sy) { x = +sx; y = +sy; positioned = true }
+    } catch {}
+  }
+  restorePosition()
 
   function toggle() {
     open = !open
@@ -179,7 +190,7 @@ Be concise, practical, and maintain a warm, encouraging tone.`
 />
 
 <div class="panel" class:open class:hidden bind:this={panelEl} style={positioned ? `left:${x}px;top:${y}px;bottom:auto;right:auto;` : ''}>
-  <button class="toggle" onclick={toggle} aria-label={open ? 'Close chat' : 'Open chat'}>
+  <button class="toggle" onclick={toggle} onmousedown={handleMouseDown} aria-label={open ? 'Close chat' : 'Open chat'}>
     {#if open}
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <line x1="18" y1="6" x2="6" y2="18"></line>

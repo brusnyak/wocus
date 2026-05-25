@@ -8,11 +8,12 @@
       if (node.type === 'taskList' && node.content) {
         node.content.forEach((item) => {
           const text = item.content?.[0]?.content?.[0]?.text || 'Untitled task'
+          const rawStatus = item.attrs?.status || (item.attrs?.checked ? 'done' : 'todo')
           todos.push({
-            checked: item.attrs?.checked || false,
             text,
             blockIndex,
             taskListIndex: json.content.indexOf(node),
+            status: rawStatus,
           })
         })
       }
@@ -23,36 +24,27 @@
   let parsed = $derived(JSON.parse(contentJson))
   let todos = $derived(extractTodos(parsed))
 
-  let todoItems = $derived(todos.filter(t => t.checked !== true))
-  let inProgressItems = $derived.by(() => {
-    const checked = todos.filter(t => t.checked === true)
-    return checked.slice(0, Math.max(0, checked.length - doneItems.length))
-  })
-  let doneItems = $derived(todos.filter(t => t.checked === true))
+  let todoItems = $derived(todos.filter(t => t.status === 'todo'))
+  let inProgressItems = $derived(todos.filter(t => t.status === 'in-progress'))
+  let doneItems = $derived(todos.filter(t => t.status === 'done'))
 
-  function setChecked(item, checked) {
+  function setStatus(item, status) {
     const json = JSON.parse(contentJson)
     const taskList = json.content[item.blockIndex]
     if (!taskList || !taskList.content) return
     for (const child of taskList.content) {
       if ((child.content?.[0]?.content?.[0]?.text || 'Untitled task') === item.text) {
-        child.attrs = { ...child.attrs, checked }
+        child.attrs = { ...child.attrs, status, checked: status === 'done' }
       }
     }
     onUpdateTodos?.(JSON.stringify(json))
   }
 
-  function moveToInProgress(item) {
-    setChecked(item, true)
-  }
+  function moveToInProgress(item) { setStatus(item, 'in-progress') }
 
-  function moveBackToTodo(item) {
-    setChecked(item, false)
-  }
+  function moveBackToTodo(item) { setStatus(item, 'todo') }
 
-  function moveToDone(item) {
-    setChecked(item, true)
-  }
+  function moveToDone(item) { setStatus(item, 'done') }
 
   function handleOverlayClick(e) {
     if (e.target === e.currentTarget) onclose?.()

@@ -258,10 +258,18 @@ let font = $derived(FONTS[fontIndex])
   function handleUpdateTodos(updatedJson) {
     if (!note) return
     note.content = updatedJson
+    requestAnimationFrame(() => {
+      if (editorApi) {
+        try { editorApi.setContent(JSON.parse(updatedJson)) } catch {}
+      }
+    })
     try {
       const parsed = JSON.parse(updatedJson)
       const html = parsed.content ? parsed.content.map(b => {
-        if (b.type === 'taskList') return '<ul data-type="taskList">' + (b.content || []).map(i => `<li><label><input type="checkbox" ${i.attrs?.checked ? 'checked' : ''}>${i.content?.[0]?.content?.[0]?.text || ''}</label></li>`).join('') + '</ul>'
+        if (b.type === 'taskList') return '<ul data-type="taskList">' + (b.content || []).map(i => {
+          const status = i.attrs?.status || (i.attrs?.checked ? 'done' : 'todo')
+          return `<li data-status="${status}"><label><input type="checkbox" ${status === 'done' ? 'checked' : ''}>${i.content?.[0]?.content?.[0]?.text || ''}</label></li>`
+        }).join('') + '</ul>'
         return ''
       }).join('\n') : ''
       const text = parsed.content ? parsed.content.map(b => {
@@ -339,69 +347,91 @@ let font = $derived(FONTS[fontIndex])
     navigateToMatch(searchIndex)
   }
 
+   let voiceStopRequested = false
+
    function toggleVoice() {
-     if (listening) {
-       if (recognition) {
-         recognition.stop()
-         recognition = null
-       }
-       listening = false
-       interimText = ''
-       return
-     }
-     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-     if (!SpeechRecognition) {
-       error = 'Speech recognition not supported in this browser.'
-       return
-     }
-     const sr = new SpeechRecognition()
-     sr.lang = 'en-US'
-     sr.interimResults = true
-     sr.continuous = true
-     let finalizedText = ''
-     sr.onresult = (e) => {
-       let interim = ''
-       for (let i = e.resultIndex; i < e.results.length; i++) {
-         const transcript = e.results[i][0].transcript
-         if (e.results[i].isFinal) {
-           finalizedText += transcript + ' '
-         } else {
-           interim += transcript
-         }
-       }
-       interimText = interim
-       const editor = getCurrentEditor()
-       if (editor && finalizedText.trim()) {
-         const { view } = editor.getEditor()
-         const tr = view.state.tr.insertText(finalizedText, view.state.selection.to)
-         view.dispatch(tr)
-         finalizedText = ''
-       }
-     }
-     sr.onerror = (e) => {
-       console.error('Speech recognition error:', e)
-       listening = false
-       interimText = ''
-       if (recognition === sr) {
-         recognition = null
-       }
-       // Don't set error here to avoid spamming UI with frequent errors
-       // Only set error for permanent issues
-       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-         error = 'Speech recognition access denied. Please check browser permissions.'
-       }
-     }
-     sr.onend = () => {
-       listening = false
-       interimText = ''
-       if (recognition === sr) {
-         recognition = null
-       }
-     }
-     sr.start()
-     recognition = sr
-     listening = true
-   }
+      if (listening) {
+        voiceStopRequested = true
+        if (recognition) {
+          recognition.stop()
+          recognition = null
+        }
+        listening = false
+        interimText = ''
+        return
+      }
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      if (!SpeechRecognition) {
+        error = 'Speech recognition not supported in this browser.'
+        return
+      }
+      voiceStopRequested = false
+
+      function startRec() {
+        if (voiceStopRequested) return
+        const sr = new SpeechRecognition()
+        sr.lang = 'en-US'
+        sr.interimResults = true
+        sr.continuous = true
+        let finalizedText = ''
+        let keepaliveTimer = null
+
+        sr.onresult = (e) => {
+          let interim = ''
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            const transcript = e.results[i][0].transcript
+            if (e.results[i].isFinal) {
+              finalizedText += transcript + ' '
+            } else {
+              interim += transcript
+            }
+          }
+          interimText = interim
+          const editor = getCurrentEditor()
+          if (editor && finalizedText.trim()) {
+            const { view } = editor.getEditor()
+            const tr = view.state.tr.insertText(finalizedText, view.state.selection.to)
+            view.dispatch(tr)
+            finalizedText = ''
+          }
+        }
+
+        sr.onerror = (e) => {
+          console.error('Speech recognition error:', e)
+          interimText = ''
+          if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+            listening = false
+            recognition = null
+            error = 'Speech recognition access denied. Please check browser permissions.'
+            return
+          }
+        }
+
+        sr.onend = () => {
+          clearInterval(keepaliveTimer)
+          interimText = ''
+          if (!voiceStopRequested) {
+            startRec()
+          } else {
+            listening = false
+            recognition = null
+          }
+        }
+
+        // Keepalive: restart silently every 15s to prevent Chrome from killing it
+        keepaliveTimer = setInterval(() => {
+          if (!voiceStopRequested && sr) {
+            try { sr.stop(); sr.start() } catch {}
+          }
+        }, 15000)
+
+        sr.start()
+        recognition = sr
+        listening = true
+      }
+
+      startRec()
+    }
 
   function toggleSearch() {
     searchOpen = !searchOpen
