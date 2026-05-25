@@ -13,7 +13,7 @@
   import KanbanBoard from './lib/KanbanBoard.svelte'
   import SmartLinks from './lib/SmartLinks.svelte'
   import NoteSidebar from './lib/NoteSidebar.svelte'
-  import { detectSensitiveData } from './lib/ai.js'
+  import { detectSensitiveData, transcribeAudio } from './lib/ai.js'
 
   let s = getSettings()
   let settingsOpen = $state(false)
@@ -34,7 +34,6 @@
   let searchIndex = $state(0)
   let searchInputEl = $state(null)
   let listening = $state(false)
-  let recognition = $state(null)
   let interimText = $state('')
 
   const FONTS = ['monospace', 'serif', 'sans-serif']
@@ -410,106 +409,74 @@ let font = $derived(FONTS[fontIndex])
     navigateToMatch(searchIndex)
   }
 
-   let voiceStopRequested = false
-   let voicePos = null
+   let mediaRecorder = null
+   let mediaStream = null
+   let audioChunks = []
 
    function toggleVoice() {
       if (listening) {
-        voiceStopRequested = true
-        if (recognition) {
-          recognition.stop()
-          recognition = null
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop()
         }
+        return
+      }
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        error = 'Microphone access not supported in this browser.'
+        return
+      }
+      if (!s.hasApiKey()) {
+        error = 'Configure an API key in Settings to use voice input.'
+        return
+      }
+      if (s.isOllama()) {
+        error = 'Voice input requires OpenAI or OpenRouter (Ollama does not support audio).'
+        return
+      }
+
+      audioChunks = []
+      listening = true
+      interimText = 'Listening...'
+
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        mediaStream = stream
+        const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : 'audio/webm'
+        mediaRecorder = new MediaRecorder(stream, { mimeType: mime })
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) audioChunks.push(e.data)
+        }
+
+        mediaRecorder.onstop = async () => {
+          interimText = 'Transcribing...'
+          const blob = new Blob(audioChunks, { type: mime })
+          try {
+            const text = await transcribeAudio(blob, s.apiEndpoint, s.apiKey)
+            const editor = getCurrentEditor()
+            if (editor && text.trim()) {
+              const { view } = editor.getEditor()
+              view.focus()
+              const tr = view.state.tr.insertText(text.trim() + ' ', view.state.selection.to)
+              view.dispatch(tr)
+            }
+          } catch (e) {
+            error = e.message || 'Transcription failed'
+          }
+          interimText = ''
+          listening = false
+          mediaStream?.getTracks().forEach(t => t.stop())
+          mediaStream = null
+          mediaRecorder = null
+        }
+
+        mediaRecorder.start()
+      }).catch(e => {
         listening = false
         interimText = ''
-        return
-      }
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-      if (!SpeechRecognition) {
-        error = 'Speech recognition not supported in this browser.'
-        return
-      }
-      voiceStopRequested = false
-
-      // Focus editor and store cursor position
-      const ed = getCurrentEditor()
-      if (ed) {
-        const { view } = ed.getEditor()
-        view.focus()
-        voicePos = view.state.selection.to
-      } else {
-        voicePos = null
-      }
-
-      function startRec() {
-        if (voiceStopRequested) return
-        const sr = new SpeechRecognition()
-        sr.lang = 'en-US'
-        sr.interimResults = true
-        sr.continuous = true
-        let keepaliveTimer = null
-
-        sr.onresult = (e) => {
-          let interim = ''
-          let finalized = ''
-          for (let i = e.resultIndex; i < e.results.length; i++) {
-            const transcript = e.results[i][0].transcript
-            if (e.results[i].isFinal) {
-              finalized += transcript + ' '
-            } else {
-              interim += transcript
-            }
-          }
-          interimText = interim
-          if (!finalized.trim()) return
-          const editor = getCurrentEditor()
-          if (editor) {
-            const { view } = editor.getEditor()
-            view.focus()
-            const pos = voicePos !== null && voicePos <= view.state.doc.content.size
-              ? voicePos
-              : view.state.selection.to
-            const tr = view.state.tr.insertText(finalized, pos)
-            view.dispatch(tr)
-            voicePos = pos + finalized.length
-          }
-        }
-
-        let retryTimeout = 300
-        sr.onerror = (e) => {
-          interimText = ''
-          if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-            listening = false
-            recognition = null
-            error = 'Speech recognition access denied. Please check browser permissions.'
-            return
-          }
-        }
-
-        sr.onend = () => {
-          clearInterval(keepaliveTimer)
-          interimText = ''
-          if (!voiceStopRequested) {
-            setTimeout(startRec, retryTimeout)
-            retryTimeout = Math.min(retryTimeout * 1.5, 3000)
-          } else {
-            listening = false
-            recognition = null
-          }
-        }
-
-        keepaliveTimer = setInterval(() => {
-          if (!voiceStopRequested && sr) {
-            try { sr.stop(); sr.start() } catch {}
-          }
-        }, 15000)
-
-        sr.start()
-        recognition = sr
-        listening = true
-      }
-
-      startRec()
+        error = 'Microphone access denied. Please check browser permissions.'
+      })
     }
 
   function toggleSearch() {

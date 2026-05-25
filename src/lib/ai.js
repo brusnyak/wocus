@@ -120,6 +120,36 @@ export async function organizeWithAI(text, settings) {
   return extractJsonFromResponse(rawText)
 }
 
+export async function transcribeAudio(blob, apiEndpoint, apiKey) {
+  let audioEndpoint
+  if (apiEndpoint.includes('openrouter')) {
+    audioEndpoint = 'https://openrouter.ai/api/v1/audio/transcriptions'
+  } else if (apiEndpoint.includes('openai.com')) {
+    audioEndpoint = 'https://api.openai.com/v1/audio/transcriptions'
+  } else {
+    throw new Error('Audio transcription requires OpenAI or OpenRouter')
+  }
+
+  const formData = new FormData()
+  formData.append('file', blob, 'recording.webm')
+  formData.append('model', 'whisper-1')
+  formData.append('language', 'en')
+
+  const response = await fetch(audioEndpoint, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${apiKey}` },
+    body: formData
+  })
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => 'Unknown')
+    throw new Error(`Transcription error ${response.status}: ${errText}`)
+  }
+
+  const data = await response.json()
+  return data.text
+}
+
 export function detectSensitiveData(text) {
   if (!text) return null
   const patterns = [

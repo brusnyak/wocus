@@ -22,6 +22,7 @@
       extensions: [
         StarterKit.configure({
           heading: { levels: [1, 2, 3] },
+          link: false,
         }),
         Placeholder.configure({
           placeholder: 'Type / for blocks, or just start writing...'
@@ -162,6 +163,19 @@
   }
   .editor :global(details[open] > summary::before) { transform: rotate(90deg); }
   .editor :global(.ProseMirror details > div) { padding-left: 1em; }
+
+  .editor :global(a[href^="page://"]) {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 1px 8px 1px 4px; border-radius: 4px;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    color: var(--accent); text-decoration: none;
+    font-weight: 500; font-size: 0.9em;
+    cursor: pointer; transition: background 0.12s;
+    border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  }
+  .editor :global(a[href^="page://"]:hover) {
+    background: color-mix(in srgb, var(--accent) 20%, transparent);
+  }
 
   :global(.slash-item) {
     display: flex; align-items: center; gap: 8px; width: 100%;

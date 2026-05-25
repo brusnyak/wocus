@@ -4,14 +4,16 @@
   let {
     currentNoteId = null,
     onSelectNote,
-    parentNoteId = null,
-    onNavigateBack,
     collapsed = false,
     ontoggle
   } = $props()
 
   let notes = $state([])
   let loading = $state(true)
+
+  let currentNote = $derived(notes.find(n => n.id === currentNoteId))
+
+  let rootNotes = $derived(notes.filter(n => !n.parentId).sort((a, b) => b.updatedAt - a.updatedAt))
 
   async function refresh() {
     loading = true
@@ -28,12 +30,12 @@
   async function handleDelete(id, e) {
     e.stopPropagation()
     if (notes.length <= 1) return
-    if (!confirm('Delete this note? This cannot be undone.')) return
+    if (!confirm('Delete this page? This cannot be undone.')) return
     await deleteNote(id)
     await refresh()
-    if (id === currentNoteId) {
-      const remaining = notes.filter(n => n.id !== id)
-      if (remaining.length > 0) onSelectNote?.(remaining[0].id)
+    const remaining = notes.filter(n => n.id !== id)
+    if (id === currentNoteId && remaining.length > 0) {
+      onSelectNote?.(remaining[0].id)
     }
   }
 
@@ -41,7 +43,7 @@
     e.stopPropagation()
     const note = notes.find(n => n.id === id)
     if (!note) return
-    const name = prompt('Rename note:', note.title)
+    const name = prompt('Rename page:', note.title)
     if (!name || !name.trim()) return
     note.title = name.trim()
     await saveNote(note)
@@ -50,7 +52,7 @@
 
   function getPreview(note) {
     const text = note.text || ''
-    return text.slice(0, 100).replace(/\n/g, ' ').trim() || 'Empty note'
+    return text.slice(0, 80).replace(/\n/g, ' ').trim() || 'Empty page'
   }
 
   async function load() {
@@ -60,24 +62,19 @@
     }
   }
 
-  $effect(() => { load() })
+  $effect(() => { if (!loading) return; load() })
 </script>
 
 <aside class="note-sidebar" class:collapsed>
   <div class="sidebar-header">
-    {#if parentNoteId}
-      <button class="icon-btn back-btn" onclick={() => onNavigateBack?.()} title="Back to parent">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-      </button>
-    {/if}
-    <span class="sidebar-title">Notes</span>
-    <button class="icon-btn toggle-btn" onclick={() => ontoggle?.()}>
+    <button class="icon-btn toggle-btn" onclick={() => ontoggle?.()} title="Toggle sidebar">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
     </button>
+    <span class="sidebar-title">Notes</span>
   </div>
 
   <div class="sidebar-body">
-    {#each notes as note (note.id)}
+    {#each rootNotes as note (note.id)}
       <div
         class="note-item"
         class:active={note.id === currentNoteId}
@@ -86,6 +83,7 @@
         tabindex="0"
         onkeydown={(e) => e.key === 'Enter' && onSelectNote?.(note.id)}
       >
+        <span class="note-icon">📄</span>
         <div class="note-info">
           <span class="note-title-text">{note.title}</span>
           <span class="note-preview">{getPreview(note)}</span>
@@ -99,19 +97,23 @@
           </button>
         </div>
       </div>
+    {:else}
+      {#if !loading}
+        <div class="empty">No pages yet</div>
+      {/if}
     {/each}
   </div>
 
   <div class="sidebar-footer">
     <button class="new-btn" onclick={handleCreate}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-      New Note
+      New Page
     </button>
   </div>
 </aside>
 
 {#if collapsed}
-  <button class="sidebar-reveal" onclick={() => ontoggle?.()} title="Open notes">
+  <button class="sidebar-reveal" onclick={() => ontoggle?.()} title="Open pages">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
   </button>
 {/if}
@@ -122,7 +124,7 @@
     left: 0;
     top: 0;
     bottom: 0;
-    width: 260px;
+    width: 280px;
     background: var(--surface);
     border-right: 1px solid var(--border);
     display: flex;
@@ -130,27 +132,26 @@
     z-index: 100;
     transition: transform 0.25s ease;
   }
-  .note-sidebar.collapsed {
-    transform: translateX(-260px);
-  }
+  .note-sidebar.collapsed { transform: translateX(-280px); }
 
   .sidebar-header {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 16px;
+    padding: 14px 12px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
+    min-height: 48px;
   }
   .sidebar-title {
     flex: 1;
-    font-size: 0.85em;
+    font-size: 0.82em;
     font-weight: 600;
     color: var(--fg);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .toggle-btn { margin-left: auto; }
 
   .icon-btn {
     display: flex; align-items: center; justify-content: center;
@@ -167,18 +168,17 @@
   .sidebar-body {
     flex: 1;
     overflow-y: auto;
-    padding: 8px;
+    padding: 6px;
   }
 
   .note-item {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 10px 12px;
-    border-radius: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
     cursor: pointer;
-    transition: background 0.15s;
-    margin-bottom: 2px;
+    transition: background 0.12s;
   }
   .note-item:hover { background: var(--hover); }
   .note-item.active {
@@ -187,53 +187,49 @@
   }
   .note-item.active .note-actions { opacity: 1; }
 
+  .note-icon { font-size: 0.85em; flex-shrink: 0; }
+
   .note-info {
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
   }
   .note-title-text {
-    font-size: 0.85em;
+    font-size: 0.82em;
     font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .note-preview {
-    font-size: 0.72em;
+    font-size: 0.7em;
     color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .note-item.active .note-preview { color: rgba(255,255,255,0.7); }
+  .note-item.active .note-preview { color: rgba(255,255,255,0.65); }
 
   .note-actions {
     display: flex;
-    gap: 2px;
+    gap: 1px;
     opacity: 0;
-    transition: opacity 0.15s;
+    transition: opacity 0.12s;
     flex-shrink: 0;
   }
   .note-item:hover .note-actions { opacity: 1; }
 
-  .rename-input {
-    border: none;
-    background: var(--bg);
-    color: var(--fg);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 0.85em;
-    font-weight: 500;
-    outline: 1px solid var(--accent);
-    width: 100%;
-    font-family: inherit;
+  .empty {
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--muted);
+    font-size: 0.82em;
   }
 
   .sidebar-footer {
-    padding: 12px;
+    padding: 10px 12px;
     border-top: 1px solid var(--border);
     flex-shrink: 0;
   }
@@ -253,10 +249,7 @@
     font-family: inherit;
     transition: color 0.15s, border-color 0.15s;
   }
-  .new-btn:hover {
-    color: var(--fg);
-    border-color: var(--accent);
-  }
+  .new-btn:hover { color: var(--fg); border-color: var(--accent); }
 
   .sidebar-reveal {
     position: fixed;
@@ -275,10 +268,5 @@
     z-index: 90;
     transition: color 0.15s, background 0.15s;
   }
-  .sidebar-reveal:hover {
-    color: var(--fg);
-    background: var(--hover);
-  }
-
-  .back-btn { margin-right: 2px; }
+  .sidebar-reveal:hover { color: var(--fg); background: var(--hover); }
 </style>
