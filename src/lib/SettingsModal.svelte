@@ -208,7 +208,7 @@
           <label class="field toggle-field">
             <span class="toggle-label">
               <span>Typing Sound</span>
-              <span class="toggle-desc">Real typewriter sound played on each keystroke</span>
+              <span class="toggle-desc">Synthesized mechanical keyboard click (no audio files needed)</span>
             </span>
             <label class="switch">
               <input type="checkbox" checked={s.typingSound} onchange={(e) => s.typingSound = e.target.checked} />

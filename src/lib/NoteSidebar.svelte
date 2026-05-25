@@ -38,31 +38,14 @@
   }
 
   async function handleRename(id, e) {
-    const li = e.currentTarget.closest('.note-item')
-    const titleEl = li.querySelector('.note-title-text')
-    const input = document.createElement('input')
-    input.type = 'text'
-    input.value = titleEl.textContent
-    input.className = 'rename-input'
-    titleEl.replaceWith(input)
-    input.focus()
-    input.select()
-
-    async function commit() {
-      const val = input.value.trim() || 'Untitled'
-      const note = notes.find(n => n.id === id)
-      if (note) {
-        note.title = val
-        await saveNote(note)
-        await refresh()
-      }
-    }
-
-    input.onblur = commit
-    input.onkeydown = (ev) => {
-      if (ev.key === 'Enter') { input.blur() }
-      if (ev.key === 'Escape') { input.value = titleEl.textContent; input.blur() }
-    }
+    e.stopPropagation()
+    const note = notes.find(n => n.id === id)
+    if (!note) return
+    const name = prompt('Rename note:', note.title)
+    if (!name || !name.trim()) return
+    note.title = name.trim()
+    await saveNote(note)
+    await refresh()
   }
 
   function getPreview(note) {

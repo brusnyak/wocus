@@ -24,6 +24,9 @@
   let dragging = $state(false)
   let dragOffsetX = $state(0)
   let dragOffsetY = $state(0)
+  let dragStartX = $state(0)
+  let dragStartY = $state(0)
+  let dragMoved = $state(false)
   let positioned = $state(false)
   let panelEl = $state(null)
   let headerEl = $state(null)
@@ -32,13 +35,19 @@
 
   function handleMouseDown(e) {
     dragging = true
+    dragMoved = false
     const rect = panelEl.getBoundingClientRect()
     dragOffsetX = e.clientX - rect.left
     dragOffsetY = e.clientY - rect.top
+    dragStartX = e.clientX
+    dragStartY = e.clientY
   }
 
   function handleMouseMove(e) {
     if (!dragging) return
+    if (Math.abs(e.clientX - dragStartX) > 5 || Math.abs(e.clientY - dragStartY) > 5) {
+      dragMoved = true
+    }
     x = Math.max(0, Math.min(e.clientX - dragOffsetX, window.innerWidth - 60))
     y = Math.max(0, Math.min(e.clientY - dragOffsetY, window.innerHeight - 60))
     positioned = true
@@ -46,8 +55,11 @@
 
   function handleMouseUp() {
     if (!dragging) return
+    const moved = dragMoved
     dragging = false
-    try { localStorage.setItem('wocus_chat_x', x); localStorage.setItem('wocus_chat_y', y) } catch {}
+    if (moved) {
+      try { localStorage.setItem('wocus_chat_x', x); localStorage.setItem('wocus_chat_y', y) } catch {}
+    }
   }
 
   function restorePosition() {
@@ -60,6 +72,7 @@
   restorePosition()
 
   function toggle() {
+    if (dragMoved) return
     open = !open
     if (open) {
       error = ''

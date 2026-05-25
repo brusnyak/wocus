@@ -458,8 +458,8 @@ let font = $derived(FONTS[fontIndex])
           }
         }
 
+        let retryTimeout = 300
         sr.onerror = (e) => {
-          console.error('Speech recognition error:', e)
           interimText = ''
           if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
             listening = false
@@ -473,7 +473,8 @@ let font = $derived(FONTS[fontIndex])
           clearInterval(keepaliveTimer)
           interimText = ''
           if (!voiceStopRequested) {
-            startRec()
+            setTimeout(startRec, retryTimeout)
+            retryTimeout = Math.min(retryTimeout * 1.5, 3000)
           } else {
             listening = false
             recognition = null
@@ -671,7 +672,7 @@ let font = $derived(FONTS[fontIndex])
     <NoteSidebar
       {currentNoteId}
       onSelectNote={handleSelectNote}
-      collapsed={sidebarCollapsed}
+      collapsed={sidebarCollapsed || uiHidden}
       ontoggle={() => sidebarCollapsed = !sidebarCollapsed}
     />
 

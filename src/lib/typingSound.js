@@ -1,12 +1,6 @@
-// Typewriter sound by juskiddink (freesound.org/people/juskiddink/sounds/75105)
-// Licensed under Creative Commons Attribution 4.0
-
 import { getSettings } from './settings.svelte.js'
-import cuePoints from './typewriter_cues.json'
 
 let ctx = null
-let buffer = null
-let loading = null
 
 function getContext() {
   if (!ctx) {
@@ -18,44 +12,62 @@ function getContext() {
   return ctx
 }
 
-async function loadBuffer() {
-  if (buffer) return buffer
-  if (loading) return loading
-  loading = (async () => {
-    const ac = getContext()
-    const res = await fetch('/sounds/typewriter.mp3')
-    const arrayBuffer = await res.arrayBuffer()
-    buffer = await ac.decodeAudioData(arrayBuffer)
-    return buffer
-  })()
-  return loading
+function noiseBuffer(ac, dur) {
+  const len = Math.ceil(ac.sampleRate * dur)
+  const buf = ac.createBuffer(1, len, ac.sampleRate)
+  const data = buf.getChannelData(0)
+  for (let i = 0; i < data.length; i++) {
+    data[i] = Math.random() * 2 - 1
+  }
+  return buf
 }
 
 export function playKeySound(type = 'letter') {
   if (!getSettings().typingSound) return
-  if (!cuePoints.length) return
   const ac = getContext()
-  if (!buffer) {
-    loadBuffer()
-    return
-  }
 
   try {
-    const idx = Math.floor(Math.random() * cuePoints.length)
-    const start = cuePoints[idx] - 0.004
-    const dur = type === 'enter' ? 0.16 : type === 'space' ? 0.12 : 0.08
-    const vol = type === 'enter' ? 0.8 : type === 'space' ? 0.6 : 0.5
+    const vol = type === 'enter' ? 0.55 : type === 'space' ? 0.35 : 0.3
+    const clickFreq = type === 'enter' ? 1800 : type === 'space' ? 2200 : 2500
+    const clickDecay = type === 'enter' ? 0.06 : type === 'space' ? 0.05 : 0.04
+    const thudFreq = type === 'enter' ? 100 : type === 'space' ? 130 : 160
+    const thudDecay = type === 'enter' ? 0.08 : type === 'space' ? 0.07 : 0.06
+    const now = ac.currentTime
 
-    const source = ac.createBufferSource()
-    source.buffer = buffer
-    source.playbackRate.value = 1.0
+    // Click: noise through bandpass
+    const clickBuf = noiseBuffer(ac, clickDecay + 0.01)
+    const click = ac.createBufferSource()
+    click.buffer = clickBuf
 
-    const gain = ac.createGain()
-    gain.gain.setValueAtTime(vol, ac.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur)
+    const bandpass = ac.createBiquadFilter()
+    bandpass.type = 'bandpass'
+    bandpass.frequency.value = clickFreq
+    bandpass.Q.value = 0.8
 
-    source.connect(gain)
-    gain.connect(ac.destination)
-    source.start(0, Math.max(0, start), dur)
+    const clickGain = ac.createGain()
+    clickGain.gain.setValueAtTime(0, now)
+    clickGain.gain.linearRampToValueAtTime(vol, now + 0.001)
+    clickGain.gain.exponentialRampToValueAtTime(0.001, now + clickDecay)
+
+    click.connect(bandpass)
+    bandpass.connect(clickGain)
+    clickGain.connect(ac.destination)
+    click.start(now)
+    click.stop(now + clickDecay + 0.01)
+
+    // Thud: low sine
+    const thud = ac.createOscillator()
+    thud.type = 'sine'
+    thud.frequency.value = thudFreq
+
+    const thudGain = ac.createGain()
+    thudGain.gain.setValueAtTime(0, now)
+    thudGain.gain.linearRampToValueAtTime(vol * 0.6, now + 0.002)
+    thudGain.gain.exponentialRampToValueAtTime(0.001, now + thudDecay)
+
+    thud.connect(thudGain)
+    thudGain.connect(ac.destination)
+    thud.start(now)
+    thud.stop(now + thudDecay + 0.01)
   } catch {}
 }
