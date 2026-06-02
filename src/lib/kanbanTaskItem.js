@@ -15,4 +15,17 @@ export const KanbanTaskItem = TaskItem.extend({
       },
     }
   },
+
+  addKeyboardShortcuts() {
+    return {
+      Enter: () => {
+        return this.editor
+          .chain()
+          .splitListItem(this.name)
+          .updateAttributes(this.name, { checked: false, status: 'todo' })
+          .focus()
+          .run()
+      }
+    }
+  }
 })

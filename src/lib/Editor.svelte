@@ -151,8 +151,8 @@
   .editor :global(.ProseMirror ul[data-type="taskList"]) { list-style: none; padding: 0; }
   .editor :global(.ProseMirror ul[data-type="taskList"] li) { display: flex; align-items: flex-start; gap: 0.5em; }
   .editor :global(.ProseMirror ul[data-type="taskList"] li label) { display: flex; align-items: center; gap: 0.5em; cursor: pointer; min-height: 1.6em; }
-  .editor :global(.ProseMirror ul[data-type="taskList"] li input[type="checkbox"]) { margin: 0; width: 14px; height: 14px; cursor: pointer; }
-  .editor :global(.ProseMirror ul[data-type="taskList"] li p) { margin: 0; }
+  .editor :global(.ProseMirror ul[data-type="taskList"] li input[type="checkbox"]) { margin: 0; width: 14px; height: 14px; cursor: pointer; vertical-align: middle; }
+  .editor :global(.ProseMirror ul[data-type="taskList"] li p) { margin: 0; min-height: 1.2em; }
   .editor :global(.ProseMirror details) { margin: 0.5em 0; }
   .editor :global(.ProseMirror details summary) { cursor: pointer; font-weight: 600; list-style: none; }
   .editor :global(.ProseMirror details summary)::marker,
