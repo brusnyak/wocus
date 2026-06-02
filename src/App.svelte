@@ -109,7 +109,13 @@ let font = $derived(FONTS[fontIndex])
     updateCounts(n.text || '')
     requestAnimationFrame(() => {
       if (editorApi) {
-        try { editorApi.setContent(JSON.parse(n.content || '{"type":"doc","content":[]}')) } catch { editorApi.setContent('') }
+        const raw = n.content || '{"type":"doc","content":[]}'
+        if (raw.trim().startsWith('{')) {
+          try { editorApi.setContent(JSON.parse(raw)) } catch { editorApi.setContent('') }
+        } else {
+          // HTML content (e.g. from AI-generated notes)
+          try { editorApi.setContent(raw) } catch { editorApi.setContent('') }
+        }
       }
     })
   }
@@ -870,10 +876,23 @@ let font = $derived(FONTS[fontIndex])
               handleSelectNote(cmd.value)
               break
             case 'createNote':
-              createNote({ title: cmd.title || 'Untitled' }).then(n => {
-                notes = [...notes, n]
-                handleSelectNote(n.id)
-              })
+              if (cmd.content) {
+                // Create note with initial AI-generated content
+                import('marked').then(({ marked }) => marked.parse(cmd.content)).then(html => {
+                  const div = document.createElement('div')
+                  div.innerHTML = html
+                  const text = div.textContent || ''
+                  createNote({ title: cmd.title || 'Untitled', html, text, content: html }).then(n => {
+                    notes = [...notes, n]
+                    handleSelectNote(n.id)
+                  })
+                })
+              } else {
+                createNote({ title: cmd.title || 'Untitled' }).then(n => {
+                  notes = [...notes, n]
+                  handleSelectNote(n.id)
+                })
+              }
               break
             case 'updateNote':
               { const n = notes.find(x => x.id === cmd.noteId)

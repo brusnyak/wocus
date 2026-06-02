@@ -120,19 +120,31 @@
   function executeActionBlock(block) {
     const lines = block.split('\n')
     let appendContent = null
+    let pendingCreate = null  // { title, content } when createNote collects content
+
+    function flushContent() {
+      if (appendContent === null) return
+      const content = appendContent.trimEnd()
+      if (pendingCreate) {
+        // This was a createNote — pass content as initial note body
+        if (content) pendingCreate.content = content
+        onCommand?.(pendingCreate)
+        pendingCreate = null
+      } else if (content) {
+        onCommand?.({ action: 'appendToNote', content })
+      }
+      appendContent = null
+    }
 
     for (const line of lines) {
       const trimmed = line.trim()
       if (!trimmed) continue
 
-      // If we're accumulating appendToNote content, collect everything until the next action
+      // If we're collecting multi-line content, accumulate until the next action keyword
       if (appendContent !== null) {
-        // Check if this line starts a new action (word followed by space or end)
         const nextAction = trimmed.match(/^(\S+)\s*/)
         if (nextAction && ['createnote', 'updatenote', 'seticon', 'settheme', 'setfont', 'navigate', 'appendtonote', 'setsetting'].includes(nextAction[1].toLowerCase())) {
-          // Flush previous append before processing new action
-          onCommand?.({ action: 'appendToNote', content: appendContent.trimEnd() })
-          appendContent = null
+          flushContent()
         } else {
           appendContent += line + '\n'
           continue
@@ -144,7 +156,9 @@
       const args = parts[1] || ''
       switch (action) {
         case 'createnote':
-          onCommand?.({ action: 'createNote', title: args || 'Untitled' })
+          // Collect title and then subsequent lines as initial content
+          pendingCreate = { action: 'createNote', title: (args || 'Untitled').trim() }
+          appendContent = ''
           break
         case 'updatenote':
           // Format: updateNote <id> <content>
@@ -167,6 +181,7 @@
             if (!isNaN(id)) onCommand?.({ action: 'navigate', value: id }) }
           break
         case 'appendtonote':
+          flushContent()
           // Always multi-line: collect same-line content and everything after
           appendContent = args || ''
           if (appendContent) appendContent += '\n'
@@ -176,16 +191,12 @@
             if (match) onCommand?.({ action: 'setSetting', key: match[1], value: match[2] }) }
           break
         default:
-          // Pass through unknown actions
           onCommand?.({ action, raw: args })
           break
       }
     }
 
-    // Flush any remaining multi-line append content
-    if (appendContent !== null) {
-      onCommand?.({ action: 'appendToNote', content: appendContent.trimEnd() })
-    }
+    flushContent()
   }
 
   // Generate a stable session ID for OpenRouter (persists across page loads)
@@ -345,7 +356,16 @@ appendToNote
 - Finding two
 \`\`\`
 
-User: "create a note about X" or just "create a note about [...]"
+User: "create a new note about X and outline the findings there"
+\`\`\`woku
+createNote Research: Typing Sounds
+## Key Findings
+- Web Audio API is the most reliable approach
+- Use randomized parameters for natural sound
+- Keep samples under 50ms for responsiveness
+\`\`\`
+
+User: "create a note about X" (empty note is fine)
 \`\`\`woku
 createNote Title About X
 \`\`\`
