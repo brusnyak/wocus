@@ -76,7 +76,7 @@
               event.preventDefault()
               const noteId = parseInt(link.href.replace('page://', ''), 10)
               if (!isNaN(noteId)) {
-                window.dispatchEvent(new CustomEvent('woku-navigate-page', { detail: { noteId } }))
+                window.dispatchEvent(new CustomEvent('wocus-navigate-page', { detail: { noteId } }))
               }
               return true
             }

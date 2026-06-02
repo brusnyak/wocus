@@ -1,4 +1,4 @@
-const CACHE = 'woku-v1'
+const CACHE = 'wocus-v1'
 const ASSETS = [
   '/',
   '/index.html',

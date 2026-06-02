@@ -25,7 +25,7 @@ function exec(id, editor) {
     case 'h2': editor.commands.toggleHeading({ level: 2 }); break
     case 'h3': editor.commands.toggleHeading({ level: 3 }); break
     case 'page':
-      document.dispatchEvent(new CustomEvent('woku-create-page'))
+      document.dispatchEvent(new CustomEvent('wocus-create-page'))
       hideMenu(); return
     case 'toggle':
       editor.commands.insertContent({

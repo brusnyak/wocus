@@ -166,13 +166,9 @@
             if (!isNaN(id)) onCommand?.({ action: 'navigate', value: id }) }
           break
         case 'appendtonote':
-          if (args.trim()) {
-            // Single-line append: content follows on the same line
-            onCommand?.({ action: 'appendToNote', content: args.trim() })
-          } else {
-            // Multi-line append: content follows on subsequent lines
-            appendContent = ''
-          }
+          // Always multi-line: collect same-line content and everything after
+          appendContent = args || ''
+          if (appendContent) appendContent += '\n'
           break
         default:
           // Pass through unknown actions
@@ -186,6 +182,21 @@
       onCommand?.({ action: 'appendToNote', content: appendContent.trimEnd() })
     }
   }
+
+  // Generate a stable session ID for OpenRouter (persists across page loads)
+  let sessionId = $state('')
+  $effect(() => {
+    if (!sessionId) {
+      try {
+        let sid = localStorage.getItem('woku_session_id')
+        if (!sid) {
+          sid = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)
+          localStorage.setItem('woku_session_id', sid)
+        }
+        sessionId = sid
+      } catch { sessionId = 'session-' + Date.now() }
+    }
+  })
 
   function extractPlainText(html) {
     const div = document.createElement('div')
@@ -314,7 +325,10 @@ Use a fenced code block labeled "${wokuBlock}" with one of these actions per lin
 Example:
 ${wokuBlock}
 setTheme dark
-appendToNote ## Key Points\n- First item\n- Second item
+appendToNote
+## Key Points
+- First item
+- Second item
 \`\`\`
 
 - You can suggest fun emoji icons for notes based on their content
@@ -324,13 +338,23 @@ appendToNote ## Key Points\n- First item\n- Second item
 
 Be concise, practical, and maintain a warm, encouraging tone.`
 
+    // Build conversation history (last 10 exchanges max)
+    const history = messages.slice(-20).map(m => ({
+      role: m.role,
+      content: m.content
+    }))
+
     const body = {
       model: modelName,
       messages: [
         { role: 'system', content: systemPrompt },
+        ...history,
         { role: 'user', content: userMessage }
       ]
     }
+
+    // Add OpenRouter session grouping if available
+    if (sessionId) body.session_id = sessionId
 
     const headers = {
       'Content-Type': 'application/json',

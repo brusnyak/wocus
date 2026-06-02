@@ -530,14 +530,14 @@ let font = $derived(FONTS[fontIndex])
     const blob = new Blob([text], { type: 'text/plain' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = 'woku-note.txt'; a.click()
+    a.download = 'wocus-note.txt'; a.click()
     URL.revokeObjectURL(a.href)
   }
 
   function printText() {
     const content = note?.html || ''
     const win = window.open('', '', 'width=800,height=600')
-    win.document.write(`<html><head><title>Woku</title><style>body{font-family:Georgia,serif;max-width:700px;margin:40px auto;line-height:1.8;padding:0 20px}</style></head><body>${content}</body></html>`)
+    win.document.write(`<html><head><title>Wocus</title><style>body{font-family:Georgia,serif;max-width:700px;margin:40px auto;line-height:1.8;padding:0 20px}</style></head><body>${content}</body></html>`)
     win.document.close(); win.focus(); win.print()
   }
 
@@ -553,7 +553,7 @@ let font = $derived(FONTS[fontIndex])
     const blob = new Blob([md], { type: 'text/markdown' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = 'woku-note.md'; a.click()
+    a.download = 'wocus-note.md'; a.click()
     URL.revokeObjectURL(a.href)
   }
 
@@ -661,14 +661,14 @@ let font = $derived(FONTS[fontIndex])
         uiHidden = true
       }, 3000)
     })
-    document.addEventListener('woku-create-page', handleCreatePage)
-    document.addEventListener('woku-navigate-page', handleNavigateToPage)
+    document.addEventListener('wocus-create-page', handleCreatePage)
+    document.addEventListener('wocus-navigate-page', handleNavigateToPage)
     return () => {
       document.removeEventListener('keydown', handleKeydown)
       document.removeEventListener('keydown', handleTyping)
       document.removeEventListener('mousemove', () => {})
-      document.removeEventListener('woku-create-page', handleCreatePage)
-      document.removeEventListener('woku-navigate-page', handleNavigateToPage)
+      document.removeEventListener('wocus-create-page', handleCreatePage)
+      document.removeEventListener('wocus-navigate-page', handleNavigateToPage)
     }
   })
 </script>
