@@ -87,6 +87,7 @@ function sanitizeNote(data) {
     html: typeof data.html === 'string' ? data.html : '',
     text: typeof data.text === 'string' ? data.text : '',
     title: data.title || 'Untitled',
+    icon: typeof data.icon === 'string' && data.icon ? data.icon : '📄',
     parentId: data.parentId || null,
     createdAt: data.createdAt || Date.now(),
     updatedAt: Date.now()

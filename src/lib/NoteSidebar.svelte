@@ -71,6 +71,9 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
     </button>
     <span class="sidebar-title">Notes</span>
+    <button class="new-btn-inline" onclick={handleCreate} title="New page">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+    </button>
   </div>
 
   <div class="sidebar-body">
@@ -83,7 +86,7 @@
         tabindex="0"
         onkeydown={(e) => e.key === 'Enter' && onSelectNote?.(note.id)}
       >
-        <span class="note-icon">📄</span>
+        <span class="note-icon">{note.icon || '📄'}</span>
         <div class="note-info">
           <span class="note-title-text">{note.title}</span>
           <span class="note-preview">{getPreview(note)}</span>
@@ -104,12 +107,6 @@
     {/each}
   </div>
 
-  <div class="sidebar-footer">
-    <button class="new-btn" onclick={handleCreate}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-      New Page
-    </button>
-  </div>
 </aside>
 
 {#if collapsed}
@@ -161,6 +158,15 @@
     transition: color 0.15s, background 0.15s;
     flex-shrink: 0;
   }
+  .new-btn-inline {
+    display: flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; padding: 0; flex-shrink: 0;
+    border: none; background: none; cursor: pointer;
+    color: var(--muted); border-radius: 6px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .new-btn-inline:hover { color: var(--fg); background: var(--hover); }
+
   .icon-btn:hover { color: var(--fg); background: var(--hover); }
   .icon-btn.danger:hover { color: #ef4444; background: rgba(220,38,38,0.1); }
   .icon-btn.small { width: 24px; height: 24px; }
@@ -228,28 +234,7 @@
     font-size: 0.82em;
   }
 
-  .sidebar-footer {
-    padding: 10px 12px;
-    border-top: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-  .new-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    width: 100%;
-    padding: 8px;
-    border: 1px dashed var(--border);
-    border-radius: 8px;
-    background: none;
-    cursor: pointer;
-    font-size: 0.8em;
-    color: var(--muted);
-    font-family: inherit;
-    transition: color 0.15s, border-color 0.15s;
-  }
-  .new-btn:hover { color: var(--fg); border-color: var(--accent); }
+
 
   .sidebar-reveal {
     position: fixed;

@@ -12,6 +12,7 @@
   import ChatPanel from './lib/ChatPanel.svelte'
   import KanbanBoard from './lib/KanbanBoard.svelte'
   import SmartLinks from './lib/SmartLinks.svelte'
+  import Backlinks from './lib/Backlinks.svelte'
   import NoteSidebar from './lib/NoteSidebar.svelte'
   import { detectSensitiveData, transcribeAudio } from './lib/ai.js'
 
@@ -33,6 +34,7 @@
   let searchMatches = $state([])
   let searchIndex = $state(0)
   let searchInputEl = $state(null)
+  let globalSearchResults = $state([])
   let listening = $state(false)
   let interimText = $state('')
 
@@ -367,25 +369,55 @@ let font = $derived(FONTS[fontIndex])
 
   function getCurrentEditor() { return editorApi }
 
+  let searchDebounce = null
+
   function doSearch() {
-    const editor = getCurrentEditor()
-    if (!editor || !searchQuery) { searchMatches = []; return }
-    const view = editor.getEditor().view
-    const doc = view.state.doc
-    const matches = []
-    const lower = searchQuery.toLowerCase()
-    doc.descendants((node, pos) => {
-      if (node.isText && node.text) {
-        let idx = node.text.toLowerCase().indexOf(lower)
-        while (idx !== -1) {
-          matches.push({ from: pos + idx, to: pos + idx + searchQuery.length })
-          idx = node.text.toLowerCase().indexOf(lower, idx + 1)
+    clearTimeout(searchDebounce)
+    searchDebounce = setTimeout(() => {
+      const q = searchQuery.trim()
+      if (!q || q.length < 1) { searchMatches = []; globalSearchResults = []; return }
+      const lower = q.toLowerCase()
+
+      // In-editor search (current note)
+      const editor = getCurrentEditor()
+      const matches = []
+      if (editor) {
+        const view = editor.getEditor().view
+        const doc = view.state.doc
+        doc.descendants((node, pos) => {
+          if (node.isText && node.text) {
+            let idx = node.text.toLowerCase().indexOf(lower)
+            while (idx !== -1) {
+              matches.push({ from: pos + idx, to: pos + idx + q.length })
+              idx = node.text.toLowerCase().indexOf(lower, idx + 1)
+            }
+          }
+        })
+      }
+      searchMatches = matches
+      searchIndex = 0
+
+      // Global search across all notes
+      const results = []
+      for (const n of notes) {
+        const titleLower = n.title.toLowerCase()
+        const textLower = (n.text || '').toLowerCase()
+        const titleMatch = titleLower.includes(lower)
+        const textMatch = textLower.includes(lower)
+        if (titleMatch || textMatch) {
+          // Find a snippet
+          let snippet = ''
+          if (textMatch) {
+            const idx = textLower.indexOf(lower)
+            const start = Math.max(0, idx - 50)
+            const end = Math.min(textLower.length, idx + q.length + 50)
+            snippet = (start > 0 ? '...' : '') + (n.text || '').slice(start, end).replace(/\n/g, ' ') + (end < textLower.length ? '...' : '')
+          }
+          results.push({ noteId: n.id, title: n.title, icon: n.icon || '📄', snippet, isTitleMatch: titleMatch && !textMatch })
         }
       }
-    })
-    searchMatches = matches
-    searchIndex = 0
-    if (matches.length > 0) navigateToMatch(0)
+      globalSearchResults = results
+    }, 100)
   }
 
   function navigateToMatch(index) {
@@ -481,7 +513,7 @@ let font = $derived(FONTS[fontIndex])
 
   function toggleSearch() {
     searchOpen = !searchOpen
-    if (!searchOpen) { searchQuery = ''; searchMatches = []; searchIndex = 0 }
+    if (!searchOpen) { searchQuery = ''; searchMatches = []; globalSearchResults = []; searchIndex = 0 }
     else requestAnimationFrame(() => searchInputEl?.focus())
   }
 
@@ -750,11 +782,28 @@ let font = $derived(FONTS[fontIndex])
        <button class="search-nav" onclick={nextMatch} disabled={searchMatches.length === 0} title="Next (Enter)">
          <i class="fa-solid fa-chevron-down"></i>
        </button>
-       <button class="search-close" onclick={toggleSearch}>✕</button>
-     </div>
-     {/if}
+        <button class="search-close" onclick={toggleSearch}>✕</button>
+      </div>
+      {#if searchQuery && globalSearchResults.length > 0}
+        <div class="global-search-results">
+          {#each globalSearchResults as r (r.noteId)}
+            <button class="global-search-item" onclick={() => { handleSelectNote(r.noteId); toggleSearch() }}>
+              <span class="gs-icon">{r.icon}</span>
+              <div class="gs-info">
+                <span class="gs-title">{r.title}</span>
+                {#if r.snippet}
+                  <span class="gs-snippet">{r.snippet}</span>
+                {:else}
+                  <span class="gs-snippet gs-title-only">Title match</span>
+                {/if}
+              </div>
+            </button>
+          {/each}
+        </div>
+      {/if}
+      {/if}
 
-     {#if !uiHidden && listening}
+      {#if !uiHidden && listening}
      <div class="voice-indicator">
        <i class="fa-solid fa-microphone" class:fa-beat-fade={true} style="color:var(--accent)"></i>
        {#if interimText}
@@ -788,6 +837,7 @@ let font = $derived(FONTS[fontIndex])
       {#if headingElements.length > 1}
         <SmartLinks noteText={note?.text || ''} {headingElements} />
       {/if}
+      <Backlinks {notes} currentNoteId={currentNoteId} onSelectNote={handleSelectNote} />
       <SettingsModal open={settingsOpen} onclose={() => settingsOpen = false} />
       <HelpModal open={helpOpen} onclose={() => helpOpen = false} />
       <AboutModal open={aboutOpen} onclose={() => aboutOpen = false} />
@@ -800,6 +850,41 @@ let font = $derived(FONTS[fontIndex])
         onOrganize={organize}
         onApply={handleApplySuggestion}
         onError={(msg) => error = msg}
+        appState={{
+          theme,
+          font,
+          wordCount,
+          totalNotes: notes.length
+        }}
+        onCommand={(cmd) => {
+          switch (cmd.action) {
+            case 'setTheme':
+              { const idx = THEMES.indexOf(cmd.value)
+                if (idx !== -1) { themeIndex = idx; s.darkMode = cmd.value === 'dark'; s.save() } }
+              break
+            case 'setFont':
+              { const idx = FONTS.indexOf(cmd.value)
+                if (idx !== -1) fontIndex = idx }
+              break
+            case 'navigate':
+              handleSelectNote(cmd.value)
+              break
+            case 'createNote':
+              createNote({ title: cmd.title || 'Untitled' }).then(n => {
+                notes = [...notes, n]
+                handleSelectNote(n.id)
+              })
+              break
+            case 'updateNote':
+              { const n = notes.find(x => x.id === cmd.noteId)
+                if (n && cmd.content) { n.text = cmd.content; saveNote(n); handleSelectNote(n.id) } }
+              break
+            case 'setIcon':
+              { const n = notes.find(x => x.id === cmd.noteId)
+                if (n && cmd.icon) { n.icon = cmd.icon; saveNote(n); notes = [...notes] } }
+              break
+          }
+        }}
       />
   </div>
 {/if}
@@ -910,6 +995,26 @@ let font = $derived(FONTS[fontIndex])
 }
 .search-nav:hover, .search-close:hover { color: var(--fg); }
 .search-nav:disabled { opacity: 0.25; cursor: default; }
+
+.global-search-results {
+    position: fixed; top: 48px; right: 80px; width: 340px;
+    max-height: 300px; overflow-y: auto;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    z-index: 200; padding: 4px;
+}
+.global-search-item {
+    display: flex; align-items: center; gap: 8px;
+    width: 100%; padding: 6px 8px; border: none; background: none;
+    border-radius: 5px; cursor: pointer; text-align: left;
+    font-family: inherit; transition: background 0.1s;
+}
+.global-search-item:hover { background: var(--hover); }
+.global-search-item .gs-icon { font-size: 0.9em; flex-shrink: 0; }
+.global-search-item .gs-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.global-search-item .gs-title { font-size: 0.8em; font-weight: 500; color: var(--fg); overflow: hidden; text-overflow: ellipsis; }
+.global-search-item .gs-snippet { font-size: 0.7em; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.global-search-item .gs-snippet.gs-title-only { font-style: italic; }
 
 .voice-indicator {
     position: fixed;

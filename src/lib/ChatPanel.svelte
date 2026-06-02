@@ -7,13 +7,16 @@
     hidden = false,
     onOrganize,
     onApply,
-    onError
+    onError,
+    onCommand = null,
+    appState = null
   } = $props()
 
   import { detectSensitiveData } from './ai.js'
   import { getAllNotes } from './db.js'
 
   let open = $state(false)
+  let docked = $state(false)
   let messages = $state([])
   let input = $state('')
   let loading = $state(false)
@@ -72,15 +75,20 @@
   }
   restorePosition()
 
+  function toggleDock() {
+    docked = !docked
+    if (docked) { open = true }
+  }
+
   function toggle() {
     if (dragMoved) return
+    if (docked) { docked = false; open = false; return }
     open = !open
     if (open) {
       error = ''
       if (!welcomeSent) {
         welcomeSent = true
       }
-      // Keep card visible: reposition if near viewport edges
       if (!positioned) {
         x = window.innerWidth - 400
         y = window.innerHeight - 540
@@ -96,13 +104,72 @@
   }
 
   function formatAIResponse(text) {
-    return text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    // Remove wocus action blocks from display, execute them
+    const actionRegex = /```wocus\n([\s\S]*?)```/g
+    let cleaned = text
+    let match
+    while ((match = actionRegex.exec(text)) !== null) {
+      const block = match[1].trim()
+      if (block) executeActionBlock(block)
+      cleaned = cleaned.replace(match[0], '').trim()
+    }
+    return cleaned.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+  }
+
+  function executeActionBlock(block) {
+    const lines = block.split('\n').filter(l => l.trim())
+    for (const line of lines) {
+      const parts = line.split(/\s+(.+)/)
+      const action = parts[0]?.toLowerCase()
+      const args = parts[1] || ''
+      switch (action) {
+        case 'createnote':
+          onCommand?.({ action: 'createNote', title: args || 'Untitled' })
+          break
+        case 'updatenote':
+          // Format: updateNote <id> <content>
+          { const match = args.match(/^(\d+)\s+(.+)/)
+            if (match) onCommand?.({ action: 'updateNote', noteId: parseInt(match[1]), content: match[2] }) }
+          break
+        case 'seticon':
+          // Format: setIcon <id> <emoji>
+          { const match = args.match(/^(\d+)\s+(\S+)/)
+            if (match) onCommand?.({ action: 'setIcon', noteId: parseInt(match[1]), icon: match[2] }) }
+          break
+        default:
+          // Pass through unknown actions
+          onCommand?.({ action, raw: args })
+          break
+      }
+    }
   }
 
   function extractPlainText(html) {
     const div = document.createElement('div')
     div.innerHTML = html
     return div.textContent || div.innerText || ''
+  }
+
+  function handleCommand(text) {
+    const cmd = text.toLowerCase().trim()
+    if (cmd === '/organize') { onOrganize?.(); return true }
+    if (cmd === '/clearchat') { messages = []; return true }
+    if (cmd.startsWith('/theme ')) {
+      const val = cmd.replace('/theme ', '').trim()
+      onCommand?.({ action: 'setTheme', value: val })
+      return true
+    }
+    if (cmd.startsWith('/font ')) {
+      const val = cmd.replace('/font ', '').trim()
+      onCommand?.({ action: 'setFont', value: val })
+      return true
+    }
+    if (cmd.startsWith('/navigate ') || cmd.startsWith('/goto ')) {
+      const id = parseInt(cmd.replace(/^\/(navigate|goto) /, '').trim(), 10)
+      if (!isNaN(id)) onCommand?.({ action: 'navigate', value: id })
+      return true
+    }
+    return false
   }
 
   async function send() {
@@ -112,8 +179,8 @@
     input = ''
     error = ''
 
-    if (text === '/organize') {
-      onOrganize?.()
+    // Handle local commands first
+    if (handleCommand(text)) {
       messages = [...messages, { role: 'user', content: text }]
       return
     }
@@ -163,18 +230,37 @@
       }
     } catch {}
 
+    // Build app state context
+    let stateStr = ''
+    if (appState) {
+      stateStr = `\nCurrent app state:
+- Theme: ${appState.theme || 'light'}
+- Font: ${appState.font || 'monospace'}
+- Word count: ${appState.wordCount || 0}
+- Total notes: ${appState.totalNotes || 0}
+`
+    }
+
+    const wocusBlock = '```wocus'
     const systemPrompt = systemOverride || `You are Wocus AI, a friendly and helpful note-taking assistant. The user's current note contains the following text for context:
 
 ${noteText || '(empty note)'}
 
 All notes in the workspace:
 ${allNotesContext}
-
+${stateStr}
 Your capabilities:
 - Answer questions about the note content or any note in the workspace
 - Brainstorm and expand ideas
 - Type /summarize to get a concise summary
 - Type /organize to restructure the note
+- Type /theme dark|light|solarized to change the app theme
+- Type /font monospace|serif|sans to change the font
+- Create new notes by including a ${wocusBlock} block in your response
+  Example: ${wocusBlock}\ncreateNote My New Idea\n\`\`\`
+- Update the current note by including: ${wocusBlock}\nupdateNote {id} {new content}\n\`\`\`
+- Set a note's icon: ${wocusBlock}\nsetIcon {id} 🎯\n\`\`\`
+- You can suggest fun emoji icons for notes based on their content
 - Proofread text and suggest improvements
 - Help with writing and editing tasks
 - Refer to other notes by their title when providing cross-note insights
@@ -228,8 +314,8 @@ Be concise, practical, and maintain a warm, encouraging tone.`
   onmouseup={handleMouseUp}
 />
 
-<div class="panel" class:open class:hidden bind:this={panelEl} style={positioned ? `left:${x}px;top:${y}px;bottom:auto;right:auto;` : ''}>
-  <button class="toggle" onclick={toggle} onmousedown={handleMouseDown} aria-label={open ? 'Close chat' : 'Open chat'}>
+<div class="panel" class:open class:hidden class:docked bind:this={panelEl} style={!docked && positioned ? `left:${x}px;top:${y}px;bottom:auto;right:auto;` : ''}>
+  <button class="toggle" onclick={toggle} onmousedown={docked ? undefined : handleMouseDown} aria-label={open ? 'Close chat' : 'Open chat'}>
     {#if open}
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -253,9 +339,15 @@ Be concise, practical, and maintain a warm, encouraging tone.`
         tabindex="-1"
       >
         <span class="title">Wocus AI</span>
-        <span class="dots">
-          <span></span><span></span><span></span>
-        </span>
+        <div class="header-actions">
+          <button class="dock-btn" onclick={toggleDock} title={docked ? 'Undock' : 'Dock to sidebar'}>
+            {#if docked}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
+            {:else}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="15" y1="3" x2="15" y2="21"></line></svg>
+            {/if}
+          </button>
+        </div>
       </div>
 
       <div class="messages" bind:this={messagesEl}>
@@ -330,6 +422,57 @@ Be concise, practical, and maintain a warm, encouraging tone.`
 </div>
 
 <style>
+  .panel.docked {
+    position: fixed;
+    right: 0;
+    top: 48px;
+    bottom: 0;
+    width: 340px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+    box-shadow: -2px 0 12px rgba(0,0,0,0.06);
+  }
+  .panel.docked .toggle {
+    display: none;
+  }
+  .panel.docked .card {
+    border-radius: 0;
+    border: none;
+    width: 100%;
+    max-height: none;
+    min-height: 0;
+    height: 100%;
+    resize: none;
+    animation: none;
+    box-shadow: none;
+  }
+  .panel.docked .header {
+    cursor: default;
+  }
+  .panel.docked .header:active { cursor: default; }
+
+  .panel.docked .messages {
+    flex: 1;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .dock-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; padding: 0;
+    border: none; background: none; cursor: pointer;
+    color: var(--muted); border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .dock-btn:hover { color: var(--fg); background: var(--hover); }
+
   .panel {
     position: fixed;
     bottom: 24px;
