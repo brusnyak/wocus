@@ -104,8 +104,8 @@
   }
 
   function formatAIResponse(text) {
-    // Remove wocus action blocks from display, execute them
-    const actionRegex = /```wocus\n([\s\S]*?)```/g
+    // Remove woku action blocks from display, execute them
+    const actionRegex = /```(?:wocus|woku)\n([\s\S]*?)```/g
     let cleaned = text
     let match
     while ((match = actionRegex.exec(text)) !== null) {
@@ -117,9 +117,28 @@
   }
 
   function executeActionBlock(block) {
-    const lines = block.split('\n').filter(l => l.trim())
+    const lines = block.split('\n')
+    let appendContent = null
+
     for (const line of lines) {
-      const parts = line.split(/\s+(.+)/)
+      const trimmed = line.trim()
+      if (!trimmed) continue
+
+      // If we're accumulating appendToNote content, collect everything until the next action
+      if (appendContent !== null) {
+        // Check if this line starts a new action (word followed by space or end)
+        const nextAction = trimmed.match(/^(\S+)\s*/)
+        if (nextAction && ['createnote', 'updatenote', 'seticon', 'settheme', 'setfont', 'navigate', 'appendtonote'].includes(nextAction[1].toLowerCase())) {
+          // Flush previous append before processing new action
+          onCommand?.({ action: 'appendToNote', content: appendContent.trimEnd() })
+          appendContent = null
+        } else {
+          appendContent += line + '\n'
+          continue
+        }
+      }
+
+      const parts = trimmed.split(/\s+(.+)/)
       const action = parts[0]?.toLowerCase()
       const args = parts[1] || ''
       switch (action) {
@@ -136,11 +155,35 @@
           { const match = args.match(/^(\d+)\s+(\S+)/)
             if (match) onCommand?.({ action: 'setIcon', noteId: parseInt(match[1]), icon: match[2] }) }
           break
+        case 'settheme':
+          onCommand?.({ action: 'setTheme', value: args.trim() })
+          break
+        case 'setfont':
+          onCommand?.({ action: 'setFont', value: args.trim() })
+          break
+        case 'navigate':
+          { const id = parseInt(args.trim(), 10)
+            if (!isNaN(id)) onCommand?.({ action: 'navigate', value: id }) }
+          break
+        case 'appendtonote':
+          if (args.trim()) {
+            // Single-line append: content follows on the same line
+            onCommand?.({ action: 'appendToNote', content: args.trim() })
+          } else {
+            // Multi-line append: content follows on subsequent lines
+            appendContent = ''
+          }
+          break
         default:
           // Pass through unknown actions
           onCommand?.({ action, raw: args })
           break
       }
+    }
+
+    // Flush any remaining multi-line append content
+    if (appendContent !== null) {
+      onCommand?.({ action: 'appendToNote', content: appendContent.trimEnd() })
     }
   }
 
@@ -241,8 +284,8 @@
 `
     }
 
-    const wocusBlock = '```wocus'
-    const systemPrompt = systemOverride || `You are Wocus AI, a friendly and helpful note-taking assistant. The user's current note contains the following text for context:
+    const wokuBlock = '```woku'
+    const systemPrompt = systemOverride || `You are Woku AI, a friendly and helpful note-taking assistant. The user's current note contains the following text for context:
 
 ${noteText || '(empty note)'}
 
@@ -256,10 +299,24 @@ Your capabilities:
 - Type /organize to restructure the note
 - Type /theme dark|light|solarized to change the app theme
 - Type /font monospace|serif|sans to change the font
-- Create new notes by including a ${wocusBlock} block in your response
-  Example: ${wocusBlock}\ncreateNote My New Idea\n\`\`\`
-- Update the current note by including: ${wocusBlock}\nupdateNote {id} {new content}\n\`\`\`
-- Set a note's icon: ${wocusBlock}\nsetIcon {id} 🎯\n\`\`\`
+
+You can also INCLUDE action blocks in your response to directly modify the app.
+Use a fenced code block labeled "${wokuBlock}" with one of these actions per line:
+
+  setTheme dark|light|solarized   — change app theme
+  setFont monospace|serif|sans    — change editor font
+  navigate {noteId}               — switch to a different note
+  createNote {title}              — create a new note and navigate to it
+  updateNote {id} {new content}   — replace a note's text content
+  setIcon {id} 🎯                 — set a note's emoji icon
+  appendToNote {markdown content} — add formatted content to the current note (supports headings, lists, bold, etc.)
+
+Example:
+${wokuBlock}
+setTheme dark
+appendToNote ## Key Points\n- First item\n- Second item
+\`\`\`
+
 - You can suggest fun emoji icons for notes based on their content
 - Proofread text and suggest improvements
 - Help with writing and editing tasks
@@ -338,7 +395,7 @@ Be concise, practical, and maintain a warm, encouraging tone.`
         aria-label="Drag handle"
         tabindex="-1"
       >
-        <span class="title">Wocus AI</span>
+        <span class="title">Woku AI</span>
         <div class="header-actions">
           <button class="dock-btn" onclick={toggleDock} title={docked ? 'Undock' : 'Dock to sidebar'}>
             {#if docked}
@@ -355,7 +412,7 @@ Be concise, practical, and maintain a warm, encouraging tone.`
           <div class="empty">
             <div class="welcome-card">
               <div class="welcome-icon">🤖</div>
-              <div class="welcome-name">Wocus AI</div>
+              <div class="welcome-name">Woku AI</div>
               <div class="welcome-tagline">Your intelligent note-taking assistant</div>
               <div class="welcome-abilities">
                 <div class="ability">💬 Answer questions about your note</div>

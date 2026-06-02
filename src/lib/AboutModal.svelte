@@ -10,14 +10,14 @@
   <div class="overlay" onclick={handleOverlayClick} onkeydown={(e) => e.key === 'Escape' && onclose?.()} role="dialog" tabindex="-1">
     <div class="modal">
       <div class="modal-header">
-        <h2>About Wocus</h2>
+        <h2>About Woku</h2>
         <button class="close" onclick={() => onclose?.()}>✕</button>
       </div>
       <div class="modal-body">
         <div class="hero">
           <span class="logo">W</span>
           <div>
-            <h3>Wocus</h3>
+            <h3>Woku</h3>
             <p class="tagline">Minimal, private, local-first note-taking<br/>with AI-powered organization.</p>
           </div>
         </div>
@@ -26,7 +26,7 @@
           <div class="section-icon"><i class="fa-solid fa-shield-halved"></i></div>
           <div>
             <h4>Privacy & Security</h4>
-            <p>Wocus is fully local-first. Your notes, settings, and API key never leave your device unless you choose to organize with AI — and even then, data goes only to the API endpoint you configure. Wocus has no servers, no databases, no analytics, no tracking.</p>
+            <p>Woku is fully local-first. Your notes, settings, and API key never leave your device unless you choose to organize with AI — and even then, data goes only to the API endpoint you configure. Woku has no servers, no databases, no analytics, no tracking.</p>
           </div>
         </div>
 
@@ -34,7 +34,7 @@
           <div class="section-icon"><i class="fa-solid fa-scale-balanced"></i></div>
           <div>
             <h4>Terms of Use</h4>
-            <p>Wocus is provided as-is, free to use, with no warranty. You are responsible for your own API key usage and costs. The app does not collect or transmit any personal data. By using the AI organize feature, your text is sent to the third-party API provider you configured; review their terms separately.</p>
+            <p>Woku is provided as-is, free to use, with no warranty. You are responsible for your own API key usage and costs. The app does not collect or transmit any personal data. By using the AI organize feature, your text is sent to the third-party API provider you configured; review their terms separately.</p>
           </div>
         </div>
 
