@@ -901,6 +901,14 @@ let font = $derived(FONTS[fontIndex])
                 })
               }
               break
+            case 'setSetting':
+              { const allowed = ['typingSound', 'linkAnalysis', 'autoOrganize', 'aiEnabled']
+                if (allowed.includes(cmd.key)) {
+                  s[cmd.key] = cmd.value === 'true' || cmd.value === 'on' || cmd.value === '1'
+                  s.save()
+                }
+              }
+              break
           }
         }}
       />

@@ -105,7 +105,8 @@
 
   function formatAIResponse(text) {
     // Remove woku action blocks from display, execute them
-    const actionRegex = /```(?:wocus|woku)\n([\s\S]*?)```/g
+    // Matches both ```woku\n...``` and ```woku appendToNote...```
+    const actionRegex = /```(?:wocus|woku)[ \t]*\n?([\s\S]*?)```/g
     let cleaned = text
     let match
     while ((match = actionRegex.exec(text)) !== null) {
@@ -128,7 +129,7 @@
       if (appendContent !== null) {
         // Check if this line starts a new action (word followed by space or end)
         const nextAction = trimmed.match(/^(\S+)\s*/)
-        if (nextAction && ['createnote', 'updatenote', 'seticon', 'settheme', 'setfont', 'navigate', 'appendtonote'].includes(nextAction[1].toLowerCase())) {
+        if (nextAction && ['createnote', 'updatenote', 'seticon', 'settheme', 'setfont', 'navigate', 'appendtonote', 'setsetting'].includes(nextAction[1].toLowerCase())) {
           // Flush previous append before processing new action
           onCommand?.({ action: 'appendToNote', content: appendContent.trimEnd() })
           appendContent = null
@@ -169,6 +170,10 @@
           // Always multi-line: collect same-line content and everything after
           appendContent = args || ''
           if (appendContent) appendContent += '\n'
+          break
+        case 'setsetting':
+          { const match = args.match(/^(\S+)\s+(.+)/)
+            if (match) onCommand?.({ action: 'setSetting', key: match[1], value: match[2] }) }
           break
         default:
           // Pass through unknown actions
@@ -311,32 +316,66 @@ Your capabilities:
 - Type /theme dark|light|solarized to change the app theme
 - Type /font monospace|serif|sans to change the font
 
-You can also INCLUDE action blocks in your response to directly modify the app.
-Use a fenced code block labeled "${wokuBlock}" with one of these actions per line:
+## MANDATORY: Use action blocks to DO things
 
-  setTheme dark|light|solarized   — change app theme
-  setFont monospace|serif|sans    — change editor font
-  navigate {noteId}               — switch to a different note
-  createNote {title}              — create a new note and navigate to it
-  updateNote {id} {new content}   — replace a note's text content
-  setIcon {id} 🎯                 — set a note's emoji icon
-  appendToNote {markdown content} — add formatted content to the current note (supports headings, lists, bold, etc.)
+When the user asks you to write, create, modify, or change anything — you MUST execute it using an action block. DO NOT just describe what you would do. DO IT.
 
-Example:
-${wokuBlock}
-setTheme dark
-appendToNote
-## Key Points
-- First item
-- Second item
+Format — open a fenced code block labeled "${wokuBlock}" on its own line, then one action per line, then close the block:
+
+\`\`\`woku
+setTheme dark|light|solarized     — switch theme
+setFont monospace|serif|sans      — switch font
+navigate {noteId}                  — go to another note
+createNote {title}                 — make new note & navigate there
+appendToNote                       — write markdown to current note (put content on following lines)
+  ## Heading
+  - bullet
+  - bullet
+setSetting {key} {true|false}      — toggle a setting (typingSound, linkAnalysis, autoOrganize, aiEnabled)
 \`\`\`
 
-- You can suggest fun emoji icons for notes based on their content
-- Proofread text and suggest improvements
-- Help with writing and editing tasks
-- Refer to other notes by their title when providing cross-note insights
+Examples:
 
-Be concise, practical, and maintain a warm, encouraging tone.`
+User: "outline findings at bottom of note"
+You respond with explanation, then:
+\`\`\`woku
+appendToNote
+## Key Findings
+- Finding one
+- Finding two
+\`\`\`
+
+User: "create a note about X" or just "create a note about [...]"
+\`\`\`woku
+createNote Title About X
+\`\`\`
+
+User: "make it dark" or "switch to dark mode"
+\`\`\`woku
+setTheme dark
+\`\`\`
+
+User: "turn on typing sound" or "enable typing sound"
+\`\`\`woku
+setSetting typingSound true
+\`\`\`
+
+User: "research X and write findings to note"
+\`\`\`woku
+appendToNote
+## Research: X
+- Finding one
+- Finding two
+\`\`\`
+
+CRITICAL RULES:
+- NEVER just say "I'll do X" — actually do it with an action block.
+- Multi-line appendToNote content goes on lines AFTER the action word.
+- You can include BOTH explanation text AND action blocks in one response.
+- The action block is hidden from display but still executes.
+- You can use emoji in appendToNote content.
+- Refer to other notes by their title when providing cross-note insights.
+- Be concise, practical, and maintain a warm, encouraging tone.`
 
     // Build conversation history (last 10 exchanges max)
     const history = messages.slice(-20).map(m => ({
