@@ -216,6 +216,18 @@
             </label>
           </label>
 
+          {#if s.typingSound}
+            <label class="field">
+              <span class="field-label">Sound Volume</span>
+              <div style="display:flex;align-items:center;gap:8px">
+                <i class="fa-solid fa-volume-low" style="font-size:0.7em;color:var(--muted)"></i>
+                <input type="range" min="0" max="1" step="0.05" value={s.soundVolume} oninput={(e) => s.soundVolume = parseFloat(e.target.value)} style="flex:1" />
+                <i class="fa-solid fa-volume-high" style="font-size:0.7em;color:var(--muted)"></i>
+                <span style="font-size:0.75em;color:var(--muted);min-width:2.5em;text-align:right">{Math.round(s.soundVolume * 100)}%</span>
+              </div>
+            </label>
+          {/if}
+
           <button class="test-btn" onclick={testConnection} disabled={testing}>
             {testing ? 'Testing...' : 'Test Connection'}
           </button>

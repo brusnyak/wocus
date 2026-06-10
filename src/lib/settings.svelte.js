@@ -9,7 +9,8 @@ const SETTINGS_KEYS = {
   aiEnabled: 'aiEnabled',
   autoOrganize: 'autoOrganize',
   linkAnalysis: 'linkAnalysis',
-  typingSound: 'typingSound'
+  typingSound: 'typingSound',
+  soundVolume: 'soundVolume'
 }
 
 export const PROVIDERS = {
@@ -57,6 +58,7 @@ let aiEnabled = $state(true)
 let autoOrganize = $state(false)
 let linkAnalysis = $state(true)
 let typingSound = $state(false)
+let soundVolume = $state(0.7)
 
 export function getSettings() {
   return {
@@ -79,6 +81,8 @@ export function getSettings() {
     set linkAnalysis(v) { linkAnalysis = v },
     get typingSound() { return typingSound },
     set typingSound(v) { typingSound = v },
+    get soundVolume() { return soundVolume },
+    set soundVolume(v) { soundVolume = v },
     isOllama() {
       return provider === 'ollama' || apiEndpoint.includes('localhost') || apiEndpoint.includes('0.0.0.0')
     },
@@ -98,6 +102,7 @@ export function getSettings() {
       autoOrganize = await getSetting(SETTINGS_KEYS.autoOrganize) ?? false
       linkAnalysis = await getSetting(SETTINGS_KEYS.linkAnalysis) ?? true
       typingSound = await getSetting(SETTINGS_KEYS.typingSound) ?? false
+      soundVolume = await getSetting(SETTINGS_KEYS.soundVolume) ?? 0.7
       // auto-detect provider from endpoint if not explicitly set
       if (!await getSetting(SETTINGS_KEYS.provider)) {
         provider = this.resolveProviderFromEndpoint()
@@ -114,6 +119,7 @@ export function getSettings() {
       await setSetting(SETTINGS_KEYS.autoOrganize, autoOrganize)
       await setSetting(SETTINGS_KEYS.linkAnalysis, linkAnalysis)
       await setSetting(SETTINGS_KEYS.typingSound, typingSound)
+      await setSetting(SETTINGS_KEYS.soundVolume, soundVolume)
     },
     hasApiKey() {
       return apiKey && apiKey.length > 0

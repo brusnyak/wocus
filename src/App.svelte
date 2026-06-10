@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { TextSelection } from '@tiptap/pm/state'
-  import { ensureNote, saveNote, getDb, getAllNotes, getNote, createNote } from './lib/db.js'
+  import { ensureNote, saveNote, getDb, getAllNotes, getNote, createNote, deleteNote } from './lib/db.js'
   import { getSettings } from './lib/settings.svelte.js'
   import { organizeWithAI } from './lib/ai.js'
   import Editor from './lib/Editor.svelte'
@@ -536,7 +536,8 @@ let font = $derived(FONTS[fontIndex])
     const blob = new Blob([text], { type: 'text/plain' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = 'wocus-note.txt'; a.click()
+    const name = (autoTitle(text) || 'wocus-note').replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-').toLowerCase()
+    a.download = name + '.txt'; a.click()
     URL.revokeObjectURL(a.href)
   }
 
@@ -559,7 +560,8 @@ let font = $derived(FONTS[fontIndex])
     const blob = new Blob([md], { type: 'text/markdown' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = 'wocus-note.md'; a.click()
+    const name = (autoTitle(note?.text || '') || 'wocus-note').replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '-').toLowerCase()
+    a.download = name + '.md'; a.click()
     URL.revokeObjectURL(a.href)
   }
 
@@ -660,19 +662,20 @@ let font = $derived(FONTS[fontIndex])
     load()
     document.addEventListener('keydown', handleKeydown)
     document.addEventListener('keydown', handleTyping)
-    document.addEventListener('mousemove', () => {
+    const handleMouseMove = () => {
       uiHidden = false
       clearTimeout(typingTimeout)
       typingTimeout = setTimeout(() => {
         uiHidden = true
       }, 3000)
-    })
+    }
+    document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('wocus-create-page', handleCreatePage)
     document.addEventListener('wocus-navigate-page', handleNavigateToPage)
     return () => {
       document.removeEventListener('keydown', handleKeydown)
       document.removeEventListener('keydown', handleTyping)
-      document.removeEventListener('mousemove', () => {})
+      document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('wocus-create-page', handleCreatePage)
       document.removeEventListener('wocus-navigate-page', handleNavigateToPage)
     }
@@ -836,7 +839,7 @@ let font = $derived(FONTS[fontIndex])
      </div>
 
      {#if !uiHidden && headingElements.length > 0}
-       <Sidebar {headings} onNavigate={handleNavigate} />
+        <Sidebar headings={headingElements} onNavigate={handleNavigate} />
      {/if}
 
 <KanbanBoard open={kanbanOpen} contentJson={note?.content || ''} onUpdateTodos={handleUpdateTodos} onclose={() => kanbanOpen = false} />
@@ -896,7 +899,35 @@ let font = $derived(FONTS[fontIndex])
               break
             case 'updateNote':
               { const n = notes.find(x => x.id === cmd.noteId)
-                if (n && cmd.content) { n.text = cmd.content; saveNote(n); handleSelectNote(n.id) } }
+                if (n && cmd.content) {
+                  if (cmd.replace) {
+                    // Multi-line update: convert markdown, replace entire note content
+                    import('marked').then(({ marked }) => marked.parse(cmd.content)).then(html => {
+                      createNote({ title: n.title, html, text: cmd.content, content: html, icon: n.icon }).then(updated => {
+                        Object.assign(n, updated)
+                        notes = [...notes]
+                        handleSelectNote(n.id)
+                      })
+                    })
+                  } else {
+                    // Single-line append
+                    n.text = cmd.content; saveNote(n); handleSelectNote(n.id)
+                  }
+                } }
+              break
+            case 'deleteNote':
+              { const idx = notes.findIndex(x => x.id === cmd.noteId)
+                if (idx !== -1) {
+                  const id = notes[idx].id
+                  deleteNote(id).then(() => {
+                    notes = notes.filter(x => x.id !== id)
+                    if (currentNoteId === id) {
+                      const next = notes[0]
+                      if (next) handleSelectNote(next.id)
+                      else { currentNoteId = null; note = null }
+                    }
+                  })
+                } }
               break
             case 'setIcon':
               { const n = notes.find(x => x.id === cmd.noteId)

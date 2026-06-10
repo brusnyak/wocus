@@ -42,6 +42,7 @@
             if (event.ctrlKey || event.metaKey || event.altKey) return false
             const key = event.key
             if (key === 'Enter') playKeySound('enter')
+            else if (key === 'Backspace') playKeySound('backspace')
             else if (key === ' ' || key === 'Spacebar') playKeySound('space')
             else if (key.length === 1) playKeySound('letter')
             return false

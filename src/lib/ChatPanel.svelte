@@ -103,6 +103,19 @@
     }
   }
 
+  function sanitizeHTML(html) {
+    // Strip script, iframe, object, embed, form, and event handler attributes
+    return html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+      .replace(/<object[\s\S]*?<\/object>/gi, '')
+      .replace(/<embed[\s\S]*?>/gi, '')
+      .replace(/<form[\s\S]*?<\/form>/gi, '')
+      .replace(/\son\w+\s*=\s*["'][^"']*["']/gi, '')  // onclick="...", onerror="..."
+      .replace(/\son\w+\s*=\s*[^\s>]*/gi)               // onclick=word
+      .replace(/javascript:/gi, '')                       // href="javascript:..."
+  }
+
   function formatAIResponse(text) {
     // Remove woku action blocks from display, execute them
     // Matches both ```woku\n...``` and ```woku appendToNote...```
@@ -114,13 +127,14 @@
       if (block) executeActionBlock(block)
       cleaned = cleaned.replace(match[0], '').trim()
     }
-    return cleaned.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    return sanitizeHTML(cleaned.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'))
   }
 
   function executeActionBlock(block) {
     const lines = block.split('\n')
     let appendContent = null
     let pendingCreate = null  // { title, content } when createNote collects content
+    let pendingUpdate = null  // { noteId } when updateNote collects multi-line content
 
     function flushContent() {
       if (appendContent === null) return
@@ -130,6 +144,10 @@
         if (content) pendingCreate.content = content
         onCommand?.(pendingCreate)
         pendingCreate = null
+      } else if (pendingUpdate) {
+        // This was an updateNote — replace note content
+        if (content) onCommand?.({ action: 'updateNote', noteId: pendingUpdate.noteId, content, replace: true })
+        pendingUpdate = null
       } else if (content) {
         onCommand?.({ action: 'appendToNote', content })
       }
@@ -143,7 +161,7 @@
       // If we're collecting multi-line content, accumulate until the next action keyword
       if (appendContent !== null) {
         const nextAction = trimmed.match(/^(\S+)\s*/)
-        if (nextAction && ['createnote', 'updatenote', 'seticon', 'settheme', 'setfont', 'navigate', 'appendtonote', 'setsetting'].includes(nextAction[1].toLowerCase())) {
+        if (nextAction && ['createnote', 'updatenote', 'deletenote', 'seticon', 'settheme', 'setfont', 'navigate', 'appendtonote', 'setsetting'].includes(nextAction[1].toLowerCase())) {
           flushContent()
         } else {
           appendContent += line + '\n'
@@ -164,6 +182,11 @@
           // Format: updateNote <id> <content>
           { const match = args.match(/^(\d+)\s+(.+)/)
             if (match) onCommand?.({ action: 'updateNote', noteId: parseInt(match[1]), content: match[2] }) }
+          break
+        case 'deletenote':
+          // Format: deleteNote <id>
+          { const id = parseInt(args.trim(), 10)
+            if (!isNaN(id)) onCommand?.({ action: 'deleteNote', noteId: id }) }
           break
         case 'seticon':
           // Format: setIcon <id> <emoji>
@@ -400,45 +423,70 @@ CRITICAL RULES:
     // Build conversation history (last 10 exchanges max)
     const history = messages.slice(-20).map(m => ({
       role: m.role,
-      content: m.content
+      content: m.content.replace(/<[^>]+>/g, '') // Strip HTML tags from history
     }))
 
-    const body = {
-      model: modelName,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...history,
-        { role: 'user', content: userMessage }
-      ]
-    }
+    // Detect Ollama (local endpoint)
+    const isOllama = apiEndpoint.includes('localhost') || apiEndpoint.includes('0.0.0.0') || apiEndpoint.includes('127.0.0.1')
 
-    // Add OpenRouter session grouping if available
-    if (sessionId) body.session_id = sessionId
+    let body
+    if (isOllama) {
+      // Ollama uses { model, prompt } format, not messages array
+      const fullPrompt = systemOverride
+        ? `${systemOverride}\n\n${userMessage}`
+        : `You are Woku AI in the Wocus note app.\n\nCurrent note: "${currentTitle || 'Untitled'}"\n${noteText || '(empty)'}\n\n${userMessage}`
+      body = { model: modelName, prompt: fullPrompt }
+    } else {
+      body = {
+        model: modelName,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...history,
+          { role: 'user', content: userMessage }
+        ]
+      }
+    }
 
     const headers = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`
     }
 
-    const response = await fetch(apiEndpoint, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body)
-    })
+    // Add timeout and cancellation support
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s timeout
 
-    if (!response.ok) {
-      const errText = await response.text().catch(() => 'Unknown error')
-      throw new Error(`API error ${response.status}: ${errText}`)
+    try {
+      const response = await fetch(apiEndpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => 'Unknown error')
+        if (response.status === 429) throw new Error('Rate limited — please wait a moment and try again.')
+        throw new Error(`API error ${response.status}: ${errText}`)
+      }
+
+      const data = await response.json()
+
+      // Handle Ollama response format
+      if (isOllama) {
+        return data.response || ''
+      }
+
+      const rawText = data.choices?.[0]?.message?.content
+      if (!rawText) throw new Error('Empty AI response')
+      return rawText
+    } catch (e) {
+      clearTimeout(timeoutId)
+      if (e.name === 'AbortError') throw new Error('Request timed out — the AI took too long to respond.')
+      throw e
     }
-
-    const data = await response.json()
-    const rawText = data.choices?.[0]?.message?.content
-
-    if (!rawText) {
-      throw new Error('Empty AI response')
-    }
-
-    return rawText
   }
 
   function handleKeydown(e) {
@@ -688,17 +736,6 @@ CRITICAL RULES:
     font-size: 0.85em;
     font-weight: 600;
     color: var(--fg);
-  }
-  .dots {
-    display: flex;
-    gap: 4px;
-  }
-  .dots span {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--muted);
-    opacity: 0.4;
   }
 
   .messages {
