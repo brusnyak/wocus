@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "Sourcus",
+  "version": "0.1.1",
+  "description": "Auto-collect YouTube tabs and send them as sources to NotebookLM.",
+  "permissions": [
+    "tabs",
+    "storage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://notebook.google.com/*",
+    "https://notebooklm.google.com/*",
+    "https://www.youtube.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Sourcus",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_page": "options/options.html",
+  "content_scripts": [
+    {
+      "matches": ["https://notebook.google.com/*", "https://notebooklm.google.com/*"],
+      "js": ["lib/notebooklm-proxy.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

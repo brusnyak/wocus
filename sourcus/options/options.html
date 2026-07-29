@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=640">
+  <title>Sourcus — Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>Sourcus</h1>
+      <p class="subtitle">YouTube tab collector → NotebookLM</p>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2>Thresholds</h2>
+        <div class="field">
+          <label for="tabAge">Tab age threshold (minutes)</label>
+          <input type="number" id="tabAge" min="1" max="120" value="5">
+          <p class="hint">Collect videos from tabs open longer than this.</p>
+        </div>
+        <div class="field">
+          <label for="tabCount">Tab count threshold</label>
+          <input type="number" id="tabCount" min="2" max="100" value="5">
+          <p class="hint">Trigger collection when more than this many YouTube tabs are open.</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>NotebookLM Target</h2>
+        <div class="field">
+          <label for="notebookMode">Destination</label>
+          <select id="notebookMode">
+            <option value="_new">Create new notebook each time</option>
+            <option value="_existing">Use existing notebook</option>
+          </select>
+        </div>
+        <div class="field" id="notebookSelectField" style="display:none">
+          <label for="notebookSelect">Select notebook</label>
+          <select id="notebookSelect">
+            <option value="">— Loading notebooks —</option>
+          </select>
+          <button id="refreshNotebooks" class="btn-small">Refresh</button>
+          <p class="hint">Notebooks are fetched from your NotebookLM account.</p>
+        </div>
+        <div class="field">
+          <label for="notebookName">New notebook name</label>
+          <input type="text" id="notebookName" value="Sourcus - YouTube Digest">
+        </div>
+        <div class="field">
+          <button id="verifyBtn" class="btn-secondary">Verify NotebookLM Connection</button>
+          <span id="verifyResult"></span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>General</h2>
+        <div class="field checkbox-field">
+          <label>
+            <input type="checkbox" id="enabled" checked>
+            Auto-collection enabled
+          </label>
+        </div>
+        <div class="field checkbox-field">
+          <label>
+            <input type="checkbox" id="debugMode">
+            Debug mode (verbose logging)
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Debug</h2>
+        <div id="logContainer">
+          <div class="log-controls">
+            <button id="clearLogBtn" class="btn-small">Clear Log</button>
+            <button id="collectNowBtn" class="btn-small">Test Collect</button>
+          </div>
+          <div id="logEntries"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <button id="saveBtn" class="btn-primary">Save Settings</button>
+      <span id="saveStatus"></span>
+    </footer>
+  </div>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

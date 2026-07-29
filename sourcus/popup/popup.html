@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=360">
+  <title>Sourcus</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>Sourcus</h1>
+      <span class="badge" id="statusBadge">active</span>
+      <div id="connectionStatus" class="conn-status conn-unknown">NotebookLM: checking...</div>
+    </header>
+
+    <section id="summary" class="card">
+      <div class="stat-row">
+        <div class="stat">
+          <span class="stat-value" id="watchCount">0</span>
+          <span class="stat-label">watching</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="queueCount">0</span>
+          <span class="stat-label">queued</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="sentCount">0</span>
+          <span class="stat-label">sent</span>
+        </div>
+        <div class="stat" id="failedStat">
+          <span class="stat-value" id="failedCount">0</span>
+          <span class="stat-label">failed</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="queueSection" class="card" style="display:none">
+      <div class="card-header">
+        <span>Queue</span>
+        <button id="clearBtn" class="btn-text">Clear</button>
+      </div>
+      <div id="queueList"></div>
+    </section>
+
+    <section class="actions">
+      <button id="collectBtn" class="btn-primary">Collect Now</button>
+      <button id="optionsBtn" class="btn-secondary">Settings</button>
+    </section>
+
+    <section id="debugSection" class="card" style="display:none">
+      <div class="card-header">
+        <span>Debug Log</span>
+        <button id="toggleDebug" class="btn-text">Show</button>
+      </div>
+      <div id="debugLog"></div>
+    </section>
+
+    <footer>
+      <span class="version">v0.1.0</span>
+    </footer>
+  </div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
