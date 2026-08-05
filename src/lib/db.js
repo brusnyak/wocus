@@ -89,6 +89,7 @@ function sanitizeNote(data) {
     title: data.title || 'Untitled',
     icon: typeof data.icon === 'string' && data.icon ? data.icon : '📄',
     parentId: data.parentId || null,
+    tags: Array.isArray(data.tags) ? data.tags : [],
     createdAt: data.createdAt || Date.now(),
     updatedAt: Date.now()
   }

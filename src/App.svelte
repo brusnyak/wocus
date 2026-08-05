@@ -353,6 +353,8 @@ let font = $derived(FONTS[fontIndex])
       } else { error = 'AI returned empty content. Try again.' }
       if (result?.tags) {
         noteTags = result.tags
+        note.tags = result.tags
+        await saveNote($state.snapshot(note))
       }
     } catch (e) { error = e.message || 'Failed to organize' }
     organizing = false

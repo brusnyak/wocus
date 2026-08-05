@@ -13,10 +13,44 @@
 
   let notes = $state([])
   let loading = $state(true)
+  let collapsedTags = $state(new Set())
+  let tagContextNoteId = $state(null)
+  let tagInputValue = $state('')
 
   let currentNote = $derived(notes.find(n => n.id === currentNoteId))
 
   let rootNotes = $derived(notes.filter(n => !n.parentId).sort((a, b) => b.updatedAt - a.updatedAt))
+
+  let allTags = $derived(() => {
+    const tagSet = new Set()
+    for (const n of rootNotes) {
+      for (const t of (n.tags || [])) tagSet.add(t)
+    }
+    return [...tagSet].sort()
+  })
+
+  let tagGroups = $derived(() => {
+    const groups = new Map()
+    for (const tag of allTags()) groups.set(tag, [])
+    for (const n of rootNotes) {
+      const tags = n.tags || []
+      if (tags.length > 0) {
+        // Put in first tag's group
+        const arr = groups.get(tags[0])
+        if (arr) arr.push(n)
+      }
+    }
+    return groups
+  })
+
+  let untaggedNotes = $derived(rootNotes.filter(n => !(n.tags || []).length))
+
+  function toggleTagCollapse(tag) {
+    const s = new Set(collapsedTags)
+    if (s.has(tag)) s.delete(tag)
+    else s.add(tag)
+    collapsedTags = s
+  }
 
   async function refresh() {
     loading = true
@@ -48,6 +82,30 @@
     await refresh()
   }
 
+  function openTagInput(noteId, e) {
+    e.stopPropagation()
+    const note = notes.find(n => n.id === noteId)
+    tagContextNoteId = noteId
+    tagInputValue = (note?.tags || []).join(', ')
+  }
+
+  async function saveTags() {
+    if (!tagContextNoteId) return
+    const note = notes.find(n => n.id === tagContextNoteId)
+    if (!note) return
+    const tags = tagInputValue.split(',').map(t => t.trim().toLowerCase()).filter(Boolean)
+    note.tags = tags
+    await saveNote(note)
+    tagContextNoteId = null
+    tagInputValue = ''
+    await refresh()
+  }
+
+  function handleTagKeydown(e) {
+    if (e.key === 'Enter') saveTags()
+    else if (e.key === 'Escape') { tagContextNoteId = null; tagInputValue = '' }
+  }
+
   function getPreview(note) {
     const text = note.text || ''
     return text.slice(0, 80).replace(/\n/g, ' ').trim() || 'Empty page'
@@ -76,35 +134,103 @@
   </div>
 
   <div class="sidebar-body">
-    {#each rootNotes as note (note.id)}
-      <div
-        class="note-item"
-        class:active={note.id === currentNoteId}
-        onclick={() => onSelectNote?.(note.id)}
-        role="button"
-        tabindex="0"
-        onkeydown={(e) => e.key === 'Enter' && onSelectNote?.(note.id)}
-      >
-        <span class="note-icon">{note.icon || '📄'}</span>
-        <div class="note-info">
-          <span class="note-title-text">{note.title}</span>
-          <span class="note-preview">{getPreview(note)}</span>
-        </div>
-        <div class="note-actions">
-          <button class="icon-btn small" onclick={(e) => handleRename(note.id, e)} title="Rename">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-          </button>
-          <button class="icon-btn small danger" onclick={(e) => handleDelete(note.id, e)} title="Delete">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-          </button>
-        </div>
+    {#each tagGroups() as [tag, tagNotes] (tag)}
+      <div class="tag-group">
+        <button class="tag-header" onclick={() => toggleTagCollapse(tag)}>
+          <span class="tag-chevron" class:collapsed={collapsedTags.has(tag)}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </span>
+          <span class="tag-label">#{tag}</span>
+          <span class="tag-count">{tagNotes.length}</span>
+        </button>
+        {#if !collapsedTags.has(tag)}
+          {#each tagNotes as note (note.id)}
+            <div
+              class="note-item tagged"
+              class:active={note.id === currentNoteId}
+              onclick={() => onSelectNote?.(note.id)}
+              role="button"
+              tabindex="0"
+              onkeydown={(e) => e.key === 'Enter' && onSelectNote?.(note.id)}
+            >
+              <span class="note-icon">{note.icon || '📄'}</span>
+              <div class="note-info">
+                <span class="note-title-text">{note.title}</span>
+                <span class="note-preview">{getPreview(note)}</span>
+              </div>
+              <div class="note-actions">
+                <button class="icon-btn small" onclick={(e) => openTagInput(note.id, e)} title="Edit tags">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
+                </button>
+                <button class="icon-btn small" onclick={(e) => handleRename(note.id, e)} title="Rename">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                </button>
+                <button class="icon-btn small danger" onclick={(e) => handleDelete(note.id, e)} title="Delete">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+              </div>
+            </div>
+          {/each}
+        {/if}
       </div>
-    {:else}
-      {#if !loading}
-        <div class="empty">No pages yet</div>
-      {/if}
     {/each}
+
+    {#if untaggedNotes.length > 0}
+      <div class="tag-group">
+        {#if allTags().length > 0}
+          <div class="tag-header untagged-label">
+            <span class="tag-label">Notes</span>
+            <span class="tag-count">{untaggedNotes.length}</span>
+          </div>
+        {/if}
+        {#each untaggedNotes as note (note.id)}
+          <div
+            class="note-item"
+            class:active={note.id === currentNoteId}
+            onclick={() => onSelectNote?.(note.id)}
+            role="button"
+            tabindex="0"
+            onkeydown={(e) => e.key === 'Enter' && onSelectNote?.(note.id)}
+          >
+            <span class="note-icon">{note.icon || '📄'}</span>
+            <div class="note-info">
+              <span class="note-title-text">{note.title}</span>
+              <span class="note-preview">{getPreview(note)}</span>
+            </div>
+            <div class="note-actions">
+              <button class="icon-btn small" onclick={(e) => openTagInput(note.id, e)} title="Add tag">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
+              </button>
+              <button class="icon-btn small" onclick={(e) => handleRename(note.id, e)} title="Rename">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+              </button>
+              <button class="icon-btn small danger" onclick={(e) => handleDelete(note.id, e)} title="Delete">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              </button>
+            </div>
+          </div>
+        {/each}
+      </div>
+    {/if}
+
+    {#if rootNotes.length === 0 && !loading}
+      <div class="empty">No pages yet</div>
+    {/if}
   </div>
+
+  {#if tagContextNoteId}
+    <div class="tag-input-bar">
+      <input
+        type="text"
+        bind:value={tagInputValue}
+        onkeydown={handleTagKeydown}
+        placeholder="tags (comma-separated)"
+      />
+      <button class="icon-btn small" onclick={saveTags} title="Save tags">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+      </button>
+    </div>
+  {/if}
 
 </aside>
 
@@ -232,6 +358,64 @@
     color: var(--muted);
     font-size: 0.82em;
   }
+
+  .tag-group { margin-bottom: 2px; }
+  .tag-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    padding: 5px 10px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 0.72em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-radius: 4px;
+    transition: color 0.12s, background 0.12s;
+    font-family: inherit;
+    text-align: left;
+  }
+  .tag-header:hover { color: var(--fg); background: var(--hover); }
+  .tag-chevron {
+    display: flex;
+    align-items: center;
+    transition: transform 0.15s;
+    flex-shrink: 0;
+  }
+  .tag-chevron.collapsed { transform: rotate(-90deg); }
+  .tag-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tag-count {
+    font-size: 0.9em;
+    font-weight: 400;
+    opacity: 0.5;
+  }
+  .untagged-label { cursor: default; }
+  .untagged-label:hover { background: none; }
+  .note-item.tagged { padding-left: 20px; }
+
+  .tag-input-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .tag-input-bar input {
+    flex: 1;
+    border: none;
+    background: none;
+    outline: none;
+    color: var(--fg);
+    font-size: 0.78em;
+    font-family: inherit;
+    padding: 2px 0;
+  }
+  .tag-input-bar input::placeholder { color: var(--muted); }
 
 
 
