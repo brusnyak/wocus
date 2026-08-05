@@ -4,8 +4,11 @@
   let {
     currentNoteId = null,
     onSelectNote,
+    onDeleteNote,
+    onRefreshReady,
     collapsed = false,
-    ontoggle
+    ontoggle,
+    onReveal
   } = $props()
 
   let notes = $state([])
@@ -31,12 +34,7 @@
     e.stopPropagation()
     if (notes.length <= 1) return
     if (!confirm('Delete this page? This cannot be undone.')) return
-    await deleteNote(id)
-    await refresh()
-    const remaining = notes.filter(n => n.id !== id)
-    if (id === currentNoteId && remaining.length > 0) {
-      onSelectNote?.(remaining[0].id)
-    }
+    onDeleteNote?.(id)
   }
 
   async function handleRename(id, e) {
@@ -56,6 +54,7 @@
   }
 
   async function load() {
+    onRefreshReady?.(refresh)
     await refresh()
     if (notes.length > 0 && !currentNoteId) {
       onSelectNote?.(notes[0].id)
@@ -110,7 +109,7 @@
 </aside>
 
 {#if collapsed}
-  <button class="sidebar-reveal" onclick={() => ontoggle?.()} title="Open pages">
+  <button class="sidebar-reveal" onclick={() => onReveal?.() || ontoggle?.()} title="Open pages">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
   </button>
 {/if}

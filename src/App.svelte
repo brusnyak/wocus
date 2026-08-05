@@ -37,6 +37,8 @@
   let globalSearchResults = $state([])
   let listening = $state(false)
   let interimText = $state('')
+  let refreshSidebar = $state(null)
+  let deletedNoteIds = $state(new Set())
 
   const FONTS = ['monospace', 'serif', 'sans-serif']
   let fontIndex = $state(0)
@@ -120,6 +122,36 @@ let font = $derived(FONTS[fontIndex])
     })
   }
 
+  async function handleDeleteNote(id) {
+    deletedNoteIds.add(id)
+    await deleteNote(id)
+    notes = notes.filter(n => n.id !== id)
+    await refreshSidebar?.()
+    if (currentNoteId === id) {
+      const next = notes[0]
+      if (next) {
+        const n = await getNote(next.id)
+        currentNoteId = next.id
+        note = n
+        noteTags = []
+        updateCounts(n?.text || '')
+        requestAnimationFrame(() => {
+          if (editorApi && n) {
+            const raw = n.content || '{"type":"doc","content":[]}'
+            if (raw.trim().startsWith('{')) {
+              try { editorApi.setContent(JSON.parse(raw)) } catch { editorApi.setContent('') }
+            } else {
+              try { editorApi.setContent(raw) } catch { editorApi.setContent('') }
+            }
+          }
+        })
+      } else {
+        currentNoteId = null
+        note = null
+      }
+    }
+  }
+
   function autoTitle(text) {
     const firstLine = (text || '').trim().split('\n')[0] || ''
     return firstLine.slice(0, 60) || 'Untitled'
@@ -155,6 +187,7 @@ let font = $derived(FONTS[fontIndex])
   function queueSave() {
     clearTimeout(saveTimer)
     saveTimer = setTimeout(async () => {
+      if (!note || !currentNoteId || deletedNoteIds.has(currentNoteId)) return
       await saveNote($state.snapshot(note))
     }, 400)
   }
@@ -696,8 +729,11 @@ let font = $derived(FONTS[fontIndex])
     <NoteSidebar
       {currentNoteId}
       onSelectNote={handleSelectNote}
+      onDeleteNote={handleDeleteNote}
+      onRefreshReady={(fn) => { refreshSidebar = fn }}
       collapsed={sidebarCollapsed || uiHidden}
       ontoggle={() => sidebarCollapsed = !sidebarCollapsed}
+      onReveal={() => { uiHidden = false; sidebarCollapsed = false }}
     />
 
 <section class="main-content"><article class="editor-wrap">
