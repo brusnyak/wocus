@@ -118,6 +118,7 @@ let font = $derived(FONTS[fontIndex])
           // HTML content (e.g. from AI-generated notes)
           try { editorApi.setContent(raw) } catch { editorApi.setContent('') }
         }
+        editorApi.focus()
       }
     })
   }
@@ -143,6 +144,7 @@ let font = $derived(FONTS[fontIndex])
             } else {
               try { editorApi.setContent(raw) } catch { editorApi.setContent('') }
             }
+            editorApi.focus()
           }
         })
       } else {
@@ -689,20 +691,32 @@ let font = $derived(FONTS[fontIndex])
       clearTimeout(typingTimeout)
       typingTimeout = setTimeout(() => {
         uiHidden = false
-      }, 3000)
+      }, 8000)
     }
+  }
+
+  function revealSidebar() {
+    uiHidden = false
+    sidebarCollapsed = false
+  }
+
+  function toggleSidebar() {
+    uiHidden = false
+    sidebarCollapsed = !sidebarCollapsed
   }
 
   onMount(() => {
     load()
     document.addEventListener('keydown', handleKeydown)
     document.addEventListener('keydown', handleTyping)
-    const handleMouseMove = () => {
+    const handleMouseMove = (e) => {
+      // Don't auto-hide while interacting with the sidebar
+      if (e.target?.closest?.('.note-sidebar')) return
       uiHidden = false
       clearTimeout(typingTimeout)
       typingTimeout = setTimeout(() => {
         uiHidden = true
-      }, 3000)
+      }, 8000)
     }
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('wocus-create-page', handleCreatePage)
@@ -734,9 +748,11 @@ let font = $derived(FONTS[fontIndex])
       onDeleteNote={handleDeleteNote}
       onRefreshReady={(fn) => { refreshSidebar = fn }}
       collapsed={sidebarCollapsed || uiHidden}
-      ontoggle={() => sidebarCollapsed = !sidebarCollapsed}
-      onReveal={() => { uiHidden = false; sidebarCollapsed = false }}
+      ontoggle={toggleSidebar}
+      onReveal={revealSidebar}
     />
+    <!-- Hover strip on the far left reveals the notes sidebar -->
+    <div class="sidebar-hover-strip" onmouseenter={revealSidebar} title="Open pages"></div>
 
 <section class="main-content"><article class="editor-wrap">
         <div class:editor-hidden={markdownView}>
@@ -756,46 +772,46 @@ let font = $derived(FONTS[fontIndex])
 
 {#if !uiHidden}
      <div class="icons-top">
-        <button class="icon-btn" onclick={toggleSearch} title="Search (⌘F)">
+        <button class="icon-btn" onclick={toggleSearch} title="Search (⌘F)" data-tip="Search (⌘F)">
           <i class="fa-solid fa-magnifying-glass"></i>
         </button>
-        <button class="icon-btn" onclick={toggleVoice} title={listening ? 'Stop listening' : 'Voice input'}>
+        <button class="icon-btn" onclick={toggleVoice} title={listening ? 'Stop listening' : 'Voice input'} data-tip={listening ? 'Stop listening' : 'Voice input'}>
           <i class="fa-solid fa-microphone" class:fa-beat-fade={listening} style={listening ? 'color:var(--accent)' : ''}></i>
         </button>
-        <button class="icon-btn" onclick={organize} disabled={organizing} title="Organize with AI (⌘⌥O)">
+        <button class="icon-btn" onclick={organize} disabled={organizing} title="Organize with AI (⌘⌥O)" data-tip="Organize with AI (⌘⌥O)">
           <i class="fa-solid fa-folder-tree"></i>
         </button>
-        <button class="icon-btn" onclick={() => kanbanOpen = true} title="Kanban board">
+        <button class="icon-btn" onclick={() => kanbanOpen = true} title="Kanban board" data-tip="Kanban board">
           <i class="fa-solid fa-columns"></i>
         </button>
-        <button class="icon-btn" onclick={exportMarkdown} title="Export Markdown">
+        <button class="icon-btn" onclick={exportMarkdown} title="Export Markdown" data-tip="Export Markdown">
           <i class="fa-solid fa-file-export"></i>
         </button>
-        <button class="icon-btn" onclick={importMarkdown} title="Import Markdown">
+        <button class="icon-btn" onclick={importMarkdown} title="Import Markdown" data-tip="Import Markdown">
           <i class="fa-solid fa-file-import"></i>
         </button>
-        <button class="icon-btn" onclick={toggleMarkdownView} title={markdownView ? 'Exit markdown view' : 'Markdown source'}>
+        <button class="icon-btn" onclick={toggleMarkdownView} title={markdownView ? 'Exit markdown view' : 'Markdown source'} data-tip={markdownView ? 'Exit markdown view' : 'Markdown source'}>
           <i class="fa-brands fa-markdown"></i>
         </button>
-        <button class="icon-btn" onclick={() => { templateName = ''; showTemplateMenu = !showTemplateMenu }} title="Save as template">
+        <button class="icon-btn" onclick={() => { templateName = ''; showTemplateMenu = !showTemplateMenu }} title="Save as template" data-tip="Save as template">
           <i class="fa-regular fa-floppy-disk"></i>
         </button>
-        <button class="icon-btn" onclick={() => settingsOpen = true} title="Settings">
+        <button class="icon-btn" onclick={() => settingsOpen = true} title="Settings" data-tip="Settings">
           <i class="fa-solid fa-gear"></i>
         </button>
-        <button class="icon-btn" onclick={cycleTheme} title="Theme (⌘⌥E)">
+        <button class="icon-btn" onclick={cycleTheme} title="Theme (⌘⌥E)" data-tip="Theme (⌘⌥E)">
           <i class="fa-solid fa-circle-half-stroke"></i>
         </button>
-        <button class="icon-btn" onclick={cycleFont} title="Font (⌘⌥A)">
+        <button class="icon-btn" onclick={cycleFont} title="Font (⌘⌥A)" data-tip="Font (⌘⌥A)">
           <i class="fa-solid fa-font"></i>
         </button>
-        <button class="icon-btn" onclick={downloadText} title="Download (⌘S)">
+        <button class="icon-btn" onclick={downloadText} title="Download (⌘S)" data-tip="Download (⌘S)">
           <i class="fa-solid fa-download"></i>
         </button>
-        <button class="icon-btn" onclick={printText} title="Print (⌘P)">
+        <button class="icon-btn" onclick={printText} title="Print (⌘P)" data-tip="Print (⌘P)">
           <i class="fa-solid fa-print"></i>
         </button>
-        <button class="icon-btn" onclick={toggleFullscreen} title="Fullscreen (⌘⌥F)">
+        <button class="icon-btn" onclick={toggleFullscreen} title="Fullscreen (⌘⌥F)" data-tip="Fullscreen (⌘⌥F)">
           <i class="fa-solid fa-expand"></i>
         </button>
       </div>
@@ -867,10 +883,10 @@ let font = $derived(FONTS[fontIndex])
 
      <div class="icons-bottom-right">
        {#if !uiHidden}
-         <button class="icon-btn" onclick={() => helpOpen = true} title="Help">
+         <button class="icon-btn" onclick={() => helpOpen = true} title="Help" data-tip="Help">
            <i class="fa-regular fa-circle-question"></i>
          </button>
-         <button class="icon-btn" onclick={() => aboutOpen = true} title="About">
+         <button class="icon-btn" onclick={() => aboutOpen = true} title="About" data-tip="About">
            <i class="fa-solid fa-circle-info"></i>
          </button>
        {/if}
@@ -1037,9 +1053,31 @@ let font = $derived(FONTS[fontIndex])
     border: none; background: none; cursor: pointer;
     color: var(--muted); transition: color 0.15s, opacity 0.3s;
     font-size: 16px;
+    position: relative;
 }
 .icon-btn:hover { color: var(--fg); }
 .icon-btn:disabled { opacity: 0.25; cursor: default; }
+.icon-btn i { pointer-events: none; }
+.icon-btn[data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute; right: 40px; top: 50%;
+    transform: translateY(-50%);
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--fg); padding: 4px 10px; border-radius: 6px;
+    font-size: 0.72em; font-family: 'Roboto Mono', monospace;
+    white-space: nowrap; z-index: 100; pointer-events: none;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+}
+
+  .sidebar-hover-strip {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 14px;
+    z-index: 80;
+    cursor: pointer;
+  }
 
 .icons-top {
     position: fixed;

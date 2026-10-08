@@ -57,8 +57,8 @@
 
   async function testConnection() {
     const cleanKey = key.trim()
-    if (cleanKey && !cleanKey.startsWith('sk-') && activeProvider === 'openrouter') {
-      testResult = '⚠️ Keys usually start with sk- — make sure you pasted the full key'
+    if (cleanKey && cleanKey.length < 8 && activeProvider !== 'ollama') {
+      testResult = '⚠️ That key looks too short — make sure you pasted the full key'
     }
     if (!cleanKey) {
       testResult = '❌ Enter an API key first'
@@ -179,7 +179,7 @@
 
           <label class="field">
             <span>API Key</span>
-            <input type="password" bind:value={key} placeholder={activeProvider === 'ollama' ? 'Not needed for local models' : 'sk-...'} disabled={activeProvider === 'ollama'} />
+            <input type="password" bind:value={key} placeholder={activeProvider === 'ollama' ? 'Not needed for local models' : 'paste your key here'} disabled={activeProvider === 'ollama'} />
           </label>
 
           <label class="field">
