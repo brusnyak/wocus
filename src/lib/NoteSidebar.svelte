@@ -7,6 +7,7 @@
     onDeleteNote,
     onRefreshReady,
     collapsed = false,
+    showReveal = true,
     ontoggle,
     onReveal
   } = $props()
@@ -234,7 +235,7 @@
 
 </aside>
 
-{#if collapsed}
+{#if collapsed && showReveal}
   <button class="sidebar-reveal" onclick={() => onReveal?.()} title="Open pages">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
   </button>
@@ -437,4 +438,10 @@
     transition: color 0.15s, background 0.15s;
   }
   .sidebar-reveal:hover { color: var(--fg); background: var(--hover); }
+
+  @media (max-width: 768px) {
+    .note-sidebar { width: min(300px, 85vw); box-shadow: 4px 0 24px rgba(0,0,0,0.25); }
+    .note-sidebar.collapsed { transform: translateX(-105%); }
+    .sidebar-reveal { width: 44px; height: 44px; top: 2px; left: 6px; }
+  }
 </style>

@@ -189,4 +189,9 @@
     padding: 20px 8px;
     line-height: 1.5;
   }
+
+  @media (max-width: 768px) {
+    .smartlinks { bottom: 120px; max-width: calc(100vw - 24px); }
+    .card { width: min(300px, calc(100vw - 24px)); }
+  }
 </style>

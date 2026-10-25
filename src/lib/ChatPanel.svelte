@@ -919,4 +919,10 @@ CRITICAL RULES:
     color: #fff;
     border-color: var(--accent);
   }
+
+  @media (max-width: 768px) {
+    .panel.docked { width: 100vw; top: 0; }
+    .panel { right: 12px; bottom: 12px; }
+    .card { width: calc(100vw - 24px); min-width: 0; max-height: 70dvh; min-height: 0; }
+  }
 </style>

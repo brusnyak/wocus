@@ -58,4 +58,8 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+  }
 </style>

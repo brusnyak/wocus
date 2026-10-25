@@ -24,7 +24,10 @@
   let loaded = $state(false)
   let currentNoteId = $state(null)
   let notes = $state([])
-  let sidebarCollapsed = $state(false)
+  let sidebarCollapsed = $state(true)
+// Burger + right-side buttons stay hidden until the pointer reaches the top band or right edge
+let chromeShown = $state(false)
+let chromeTimer
   let organizing = $state(false)
   let error = $state('')
   let headingElements = $state([])
@@ -107,6 +110,7 @@ let font = $derived(FONTS[fontIndex])
     currentNoteId = id
     note = n
     noteTags = []
+    if (window.innerWidth <= 768) sidebarCollapsed = true
     headingElements = extractSections(n.content || '').map(s => s.heading)
     updateCounts(n.text || '')
     requestAnimationFrame(() => {
@@ -709,7 +713,16 @@ let font = $derived(FONTS[fontIndex])
     load()
     document.addEventListener('keydown', handleKeydown)
     document.addEventListener('keydown', handleTyping)
+    const revealChrome = (e) => {
+      const onChrome = e.target?.closest?.('.icons-top, .icons-bottom-right, .sidebar-reveal, .template-save-popup, .search-bar')
+      if (onChrome || e.clientY < 64 || e.clientX > window.innerWidth - 64) {
+        chromeShown = true
+        clearTimeout(chromeTimer)
+        chromeTimer = setTimeout(() => { chromeShown = false }, 2500)
+      }
+    }
     const handleMouseMove = (e) => {
+      revealChrome(e)
       // Don't auto-hide while interacting with the sidebar
       if (e.target?.closest?.('.note-sidebar')) return
       uiHidden = false
@@ -719,12 +732,15 @@ let font = $derived(FONTS[fontIndex])
       }, 8000)
     }
     document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('pointerdown', revealChrome)
     document.addEventListener('wocus-create-page', handleCreatePage)
     document.addEventListener('wocus-navigate-page', handleNavigateToPage)
     return () => {
       document.removeEventListener('keydown', handleKeydown)
       document.removeEventListener('keydown', handleTyping)
       document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('pointerdown', revealChrome)
+      clearTimeout(chromeTimer)
       document.removeEventListener('wocus-create-page', handleCreatePage)
       document.removeEventListener('wocus-navigate-page', handleNavigateToPage)
     }
@@ -748,11 +764,10 @@ let font = $derived(FONTS[fontIndex])
       onDeleteNote={handleDeleteNote}
       onRefreshReady={(fn) => { refreshSidebar = fn }}
       collapsed={sidebarCollapsed || uiHidden}
+      showReveal={chromeShown}
       ontoggle={toggleSidebar}
       onReveal={revealSidebar}
     />
-    <!-- Hover strip on the far left reveals the notes sidebar -->
-    <div class="sidebar-hover-strip" onmouseenter={revealSidebar} title="Open pages"></div>
 
 <section class="main-content"><article class="editor-wrap">
         <div class:editor-hidden={markdownView}>
@@ -770,7 +785,7 @@ let font = $derived(FONTS[fontIndex])
         {/if}
       </article></section>
 
-{#if !uiHidden}
+{#if chromeShown && !uiHidden}
      <div class="icons-top">
         <button class="icon-btn" onclick={toggleSearch} title="Search (⌘F)" data-tip="Search (⌘F)">
           <i class="fa-solid fa-magnifying-glass"></i>
@@ -882,7 +897,7 @@ let font = $derived(FONTS[fontIndex])
      {/if}
 
      <div class="icons-bottom-right">
-       {#if !uiHidden}
+       {#if chromeShown && !uiHidden}
          <button class="icon-btn" onclick={() => helpOpen = true} title="Help" data-tip="Help">
            <i class="fa-regular fa-circle-question"></i>
          </button>
@@ -1025,7 +1040,7 @@ let font = $derived(FONTS[fontIndex])
     height: 100vh; color: var(--muted); font-family: 'Roboto Mono', monospace;
   }
   .app-shell {
-    height: 100vh; overflow-y: scroll;
+    height: 100vh; height: 100dvh; overflow-y: scroll;
     background: var(--bg); color: var(--fg);
     transition: background 0.3s, color 0.3s, padding-left 0.25s ease;
     padding: 50px 80px;
@@ -1069,15 +1084,6 @@ let font = $derived(FONTS[fontIndex])
     box-shadow: 0 2px 12px rgba(0,0,0,0.12);
 }
 
-  .sidebar-hover-strip {
-    position: fixed;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 14px;
-    z-index: 80;
-    cursor: pointer;
-  }
 
 .icons-top {
     position: fixed;
@@ -1260,5 +1266,30 @@ let font = $derived(FONTS[fontIndex])
     opacity: 0;
     transform: translateY(-10px);
     pointer-events: none;
+}
+
+@media (hover: none) {
+  .icon-btn[data-tip]:hover::after { display: none; }
+}
+
+@media (max-width: 768px) {
+  .app-shell { padding: 64px 16px 72px; }
+  .app-shell.sidebar-open { padding-left: 16px; }
+  .main-content { font-size: 17px; line-height: 1.7; }
+  .icons-top {
+    top: 0; left: 56px; right: 0; height: 48px;
+    flex-direction: row; align-items: center; gap: 2px;
+    overflow-x: auto; padding: 0 8px;
+    background: var(--bg); scrollbar-width: none;
+  }
+  .icons-top::-webkit-scrollbar { display: none; }
+  .icons-top :global(.icon-btn) { flex-shrink: 0; width: 40px; height: 40px; }
+  .icons-bottom-right { bottom: 84px; right: 12px; flex-direction: row; }
+  .word-count { left: 12px; bottom: 12px; }
+  .search-bar { top: 56px; width: calc(100vw - 24px); }
+  .search-bar input { flex: 1; min-width: 0; }
+  .global-search-results { max-width: calc(100vw - 24px); }
+  .template-save-popup { top: 56px; right: 12px; }
+  .voice-indicator { max-width: calc(100vw - 24px); }
 }
 </style>
