@@ -40,6 +40,39 @@
   --placeholder: #b58900;
 }
 
+/* Auto theme: follow the system preference when no data-theme is set */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #111111;
+    --fg: #fafafa;
+    --muted: #666666;
+    --border: #333333;
+    --accent: #64b5f6;
+    --code-bg: #1a1a1a;
+    --error-bg: #3d1a1a;
+    --error-color: #ff6b6b;
+    --surface: #1a1a2e;
+    --hover: #222222;
+    --placeholder: #444444;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --bg: #fafafa;
+    --fg: #111111;
+    --muted: #888888;
+    --border: #e0e0e0;
+    --accent: #4a90d9;
+    --code-bg: #f0f0f0;
+    --error-bg: #fff0f0;
+    --error-color: #e74c3c;
+    --surface: #ffffff;
+    --hover: #f4f4f4;
+    --placeholder: #cccccc;
+  }
+}
+
 * {
   margin: 0;
   padding: 0;

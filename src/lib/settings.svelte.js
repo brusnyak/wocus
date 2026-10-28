@@ -5,7 +5,7 @@ const SETTINGS_KEYS = {
   apiEndpoint: 'apiEndpoint',
   apiKey: 'apiKey',
   modelName: 'modelName',
-  darkMode: 'darkMode',
+  themeMode: 'themeMode',
   aiEnabled: 'aiEnabled',
   autoOrganize: 'autoOrganize',
   linkAnalysis: 'linkAnalysis',
@@ -41,7 +41,7 @@ const defaults = {
   apiEndpoint: PROVIDERS.openrouter.endpoint,
   apiKey: '',
   modelName: 'openrouter/auto',
-  darkMode: false,
+  themeMode: 'auto',
   aiEnabled: true,
   autoOrganize: false,
   linkAnalysis: true,
@@ -53,7 +53,7 @@ let provider = $state(defaults.provider)
 let apiEndpoint = $state(defaults.apiEndpoint)
 let apiKey = $state('')
 let modelName = $state(defaults.modelName)
-let darkMode = $state(false)
+let themeMode = $state(defaults.themeMode)
 let aiEnabled = $state(true)
 let autoOrganize = $state(false)
 let linkAnalysis = $state(true)
@@ -71,8 +71,8 @@ export function getSettings() {
     set apiKey(v) { apiKey = v },
     get modelName() { return modelName },
     set modelName(v) { modelName = v },
-    get darkMode() { return darkMode },
-    set darkMode(v) { darkMode = v },
+    get themeMode() { return themeMode },
+    set themeMode(v) { themeMode = v },
     get aiEnabled() { return aiEnabled },
     set aiEnabled(v) { aiEnabled = v },
     get autoOrganize() { return autoOrganize },
@@ -97,7 +97,9 @@ export function getSettings() {
       apiEndpoint = await getSetting(SETTINGS_KEYS.apiEndpoint) || defaults.apiEndpoint
       apiKey = await getSetting(SETTINGS_KEYS.apiKey) || ''
       modelName = await getSetting(SETTINGS_KEYS.modelName) || defaults.modelName
-      darkMode = await getSetting(SETTINGS_KEYS.darkMode) ?? false
+      themeMode = await getSetting(SETTINGS_KEYS.themeMode)
+        ?? ((await getSetting('darkMode')) ? 'dark' : 'auto')
+      if (!['light', 'dark', 'solarized', 'auto'].includes(themeMode)) themeMode = 'auto'
       aiEnabled = await getSetting(SETTINGS_KEYS.aiEnabled) ?? true
       autoOrganize = await getSetting(SETTINGS_KEYS.autoOrganize) ?? false
       linkAnalysis = await getSetting(SETTINGS_KEYS.linkAnalysis) ?? true
@@ -114,7 +116,7 @@ export function getSettings() {
       await setSetting(SETTINGS_KEYS.apiEndpoint, apiEndpoint)
       await setSetting(SETTINGS_KEYS.apiKey, apiKey)
       await setSetting(SETTINGS_KEYS.modelName, modelName)
-      await setSetting(SETTINGS_KEYS.darkMode, darkMode)
+      await setSetting(SETTINGS_KEYS.themeMode, themeMode)
       await setSetting(SETTINGS_KEYS.aiEnabled, aiEnabled)
       await setSetting(SETTINGS_KEYS.autoOrganize, autoOrganize)
       await setSetting(SETTINGS_KEYS.linkAnalysis, linkAnalysis)
