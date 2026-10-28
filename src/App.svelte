@@ -46,8 +46,10 @@ let chromeTimer
   const FONTS = ['monospace', 'serif', 'sans-serif']
   let fontIndex = $state(0)
 
-  const THEMES = ['light', 'dark', 'solarized']
+  const THEMES = ['auto', 'light', 'dark', 'solarized']
   let themeIndex = $state(0)
+
+let systemPrefersDark = $state(false)
 
 let charCount = $state(0)
 let wordCount = $state(0)
@@ -68,12 +70,17 @@ let noteTags = $state([])
   })
 
 let theme = $derived(THEMES[themeIndex])
+let resolvedTheme = $derived(theme === 'auto' ? (systemPrefersDark ? 'dark' : 'light') : theme)
 let font = $derived(FONTS[fontIndex])
 
   let saveTimer
 
   $effect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
+    if (theme === 'auto') {
+      document.documentElement.removeAttribute('data-theme')
+    } else {
+      document.documentElement.setAttribute('data-theme', theme)
+    }
   })
 
   async function load() {
@@ -88,7 +95,7 @@ let font = $derived(FONTS[fontIndex])
       notes = [n]
     }
     currentNoteId = n.id
-    themeIndex = THEMES.indexOf(s.darkMode ? 'dark' : 'light')
+    themeIndex = THEMES.indexOf(s.themeMode)
     if (themeIndex === -1) themeIndex = 0
     if (!n.content && (n.rawContent || n.organizedContent)) {
       n.content = n.organizedContent || n.rawContent || ''
@@ -566,7 +573,7 @@ let font = $derived(FONTS[fontIndex])
 
   function cycleTheme() {
     themeIndex = (themeIndex + 1) % THEMES.length
-    s.darkMode = theme === 'dark' || theme === 'solarized'
+    s.themeMode = theme
     s.save()
   }
 
@@ -711,6 +718,10 @@ let font = $derived(FONTS[fontIndex])
 
   onMount(() => {
     load()
+    const darkQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    systemPrefersDark = darkQuery.matches
+    const onSystemThemeChange = (e) => { systemPrefersDark = e.matches }
+    darkQuery.addEventListener('change', onSystemThemeChange)
     document.addEventListener('keydown', handleKeydown)
     document.addEventListener('keydown', handleTyping)
     const revealChrome = (e) => {
@@ -736,6 +747,7 @@ let font = $derived(FONTS[fontIndex])
     document.addEventListener('wocus-create-page', handleCreatePage)
     document.addEventListener('wocus-navigate-page', handleNavigateToPage)
     return () => {
+      darkQuery.removeEventListener('change', onSystemThemeChange)
       document.removeEventListener('keydown', handleKeydown)
       document.removeEventListener('keydown', handleTyping)
       document.removeEventListener('mousemove', handleMouseMove)
@@ -814,7 +826,7 @@ let font = $derived(FONTS[fontIndex])
         <button class="icon-btn" onclick={() => settingsOpen = true} title="Settings" data-tip="Settings">
           <i class="fa-solid fa-gear"></i>
         </button>
-        <button class="icon-btn" onclick={cycleTheme} title="Theme (⌘⌥E)" data-tip="Theme (⌘⌥E)">
+        <button class="icon-btn" onclick={cycleTheme} title={`Theme: ${theme} (⌘⌥E)`} data-tip={`Theme: ${theme} (⌘⌥E)`}>
           <i class="fa-solid fa-circle-half-stroke"></i>
         </button>
         <button class="icon-btn" onclick={cycleFont} title="Font (⌘⌥A)" data-tip="Font (⌘⌥A)">
@@ -929,7 +941,7 @@ let font = $derived(FONTS[fontIndex])
         onApply={handleApplySuggestion}
         onError={(msg) => error = msg}
         appState={{
-          theme,
+          theme: resolvedTheme,
           font,
           wordCount,
           totalNotes: notes.length
@@ -938,7 +950,7 @@ let font = $derived(FONTS[fontIndex])
           switch (cmd.action) {
             case 'setTheme':
               { const idx = THEMES.indexOf(cmd.value)
-                if (idx !== -1) { themeIndex = idx; s.darkMode = cmd.value === 'dark'; s.save() } }
+                if (idx !== -1) { themeIndex = idx; s.themeMode = cmd.value; s.save() } }
               break
             case 'setFont':
               { const idx = FONTS.indexOf(cmd.value)

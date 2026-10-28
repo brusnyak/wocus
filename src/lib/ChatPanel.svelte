@@ -347,7 +347,7 @@ Your capabilities:
 - Brainstorm and expand ideas
 - Type /summarize to get a concise summary
 - Type /organize to restructure the note
-- Type /theme dark|light|solarized to change the app theme
+- Type /theme auto|dark|light|solarized to change the app theme (auto follows your system)
 - Type /font monospace|serif|sans to change the font
 
 ## MANDATORY: Use action blocks to DO things
@@ -357,7 +357,7 @@ When the user asks you to write, create, modify, or change anything — you MUST
 Format — open a fenced code block labeled "${wokuBlock}" on its own line, then one action per line, then close the block:
 
 \`\`\`woku
-setTheme dark|light|solarized     — switch theme
+setTheme auto|dark|light|solarized — switch theme (auto follows the system)
 setFont monospace|serif|sans      — switch font
 navigate {noteId}                  — go to another note
 createNote {title}                 — make new note & navigate there
